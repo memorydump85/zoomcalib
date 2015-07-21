@@ -1,0 +1,6 @@
+*.o
+*.a
+*.pnm
+*.jpeg
+*.jpg
+*.png
