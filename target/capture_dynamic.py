@@ -9,6 +9,7 @@ GObject.threads_init()
 webview = WebKit.WebView()
 webview.open("file:///home/rpradeep/studio/zoomcalib/target/calib_target.html")
 
+
 #
 # Move the svg element by executing javascript
 # within the browser widget
@@ -101,6 +102,7 @@ class AnimateThread(threading.Thread):
             image_aquired_event.wait()
       
         GObject.idle_add(Gtk.main_quit)
+
 
 #
 # Construct the main window and start it all up
