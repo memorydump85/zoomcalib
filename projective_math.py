@@ -109,4 +109,6 @@ class WeightedLocalHomography(object):
     def map(self, src_pt):
         """ Map `src_pt` to the target plane using the local
         homography at `src_pt` """
-        return self.get_homography_at(src_pt).dot(homogeneous_coords_(src_pt))
+        m = self.get_homography_at(src_pt).dot(homogeneous_coords_(src_pt))
+        m /= m[2]
+        return m

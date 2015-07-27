@@ -9,3 +9,4 @@
 .tags_sorted_by_file
 *.pyc
 *.so
+*.npy

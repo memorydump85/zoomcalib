@@ -1,17 +1,18 @@
 import numpy as np
 from skimage.io import imread
+from skimage.color import rgb2gray
 from skimage.util import img_as_ubyte
-from skimage.filters import scharr
-from matplotlib import pyplot as plt
 
 from apriltag import AprilTagDetector
 from projective_math import WeightedLocalHomography, SqExpWeightingFunction
 from tag36h11_mosaic import TagMosaic
 
 
+
 def main():
 
     im = imread('/var/tmp/datasets/tamron-2.2/im000.png')
+    im = rgb2gray(im)    
     im = img_as_ubyte(im)
 
     tag_mosaic = TagMosaic(0.0254)
@@ -39,6 +40,9 @@ def main():
     print 'r_max_se = %.4f' % np.sqrt(np.max(sqerr))
 
     if True:
+        from skimage.filters import scharr
+        from matplotlib import pyplot as plt
+
         plt.imshow(1.-scharr(im), cmap='bone')
 
         INCH = 0.0254
@@ -46,7 +50,6 @@ def main():
             mapped_points = []
             for x in np.arange(0, 9, 0.1):
                 p = wlhe.map([x*INCH, -y])
-                p = p / p[2]
                 mapped_points.append(p)
             return np.array(mapped_points)
 
