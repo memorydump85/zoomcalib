@@ -13,6 +13,9 @@ from gp import GaussianProcess, sqexp2D_covariancef
 
 
 
+np.set_printoptions(precision=4)
+
+
 def main():
     #
     # Conventions:
@@ -48,12 +51,9 @@ def main():
 
     #
     # In the following section of we learn a bunch of homographies.
-    #
-    # First, we get the image and world points used for training
-    # and validation. Then:
-    #   We learn a homography from image to world
-    #   Find where the image center `c_i` projects to in world coordinates (`c_w`)
-    #   Find the local homography `LH0` from world to image at `c_w`
+    #   First, we learn a homography from image to world
+    #   Next, find where the image center `c_i` projects to in world coordinates (`c_w`)
+    #   Finally, find the local homography `LH0` from world to image at `c_w`
     #
     # The homography learning process involves finding the weighting
     # function parameter that minimizes reprojection error on the
@@ -161,7 +161,7 @@ def main():
     # gp_uy = GaussianProcess.fit(x, u[:,1], sqexp2D_covariancef, [1., 1., 1., 0., 10.])
     # print gp_uy.covf.theta
    
-    if False:
+    if True:
         from skimage.filters import scharr
         from matplotlib import pyplot as plt
 

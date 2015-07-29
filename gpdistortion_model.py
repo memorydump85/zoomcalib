@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler
 from gp import GaussianProcess, sqexp2D_covariancef
 
 
+np.set_printoptions(precision=4)
+
 
 #--------------------------------------
 class GPDistortionModel(object):
@@ -51,7 +53,15 @@ def main():
     image_points = np.load('image_points.npy')
     distortion = -np.load('undistortion.npy')
 
+    from time import time
+    t0 = time()
     model = GPDistortionModel.fit(image_points, distortion)
+    print 'Model fitting done in %.2fs' % (time()-t0)
+
+    print '\nGP Hyper-parameters'
+    print '---------------------'
+    print '  x: ', model.gp_dx_.covf.theta
+    print '  y: ', model.gp_dy_.covf.theta
 
     H, W = im.shape
     grid = np.array([[x, y] for y in xrange(0, H, 20) for x in xrange(0, W, 20)])

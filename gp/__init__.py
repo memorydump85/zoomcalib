@@ -2,6 +2,9 @@ import numpy as np
 from numpy.linalg import solve, slogdet
 from scipy import optimize
 
+import pyximport; pyximport.install()
+import gram_matrix
+
 
 
 #--------------------------------------
@@ -20,12 +23,7 @@ class GaussianProcess(object):
         if self.C is not None:
             return
         
-        N = len(self.train_x)
-        data = self.train_x
-        self.C = np.array([
-                    self.covf(data[i], data[j], colocated=(i==j))
-                    for i in xrange(0, N) for j in xrange (0, N)]
-                         ).reshape(N,N)
+        self.C = gram_matrix.gram_matrix_sq_exp_2D(self.train_x, *self.covf.theta)
         self.Cinvt = solve(self.C, self.train_t)
 
 
@@ -83,7 +81,7 @@ class GaussianProcess(object):
         self.ensure_gram_matrix()
         t = self.train_t
 
-        datafit = t.T.dot(solve(self.C, t))
+        datafit = t.T.dot(self.Cinvt)
         s, logdet = slogdet(self.C)
         complexity = s*logdet
         nomalization = len(t)*np.log(np.pi*2)
