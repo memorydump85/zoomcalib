@@ -1,6 +1,6 @@
 import numpy as np
-#from matplotlib import pyplot
-from gp import GaussianProcess, sqexp1D_covariancef, poly1D_covariancef
+from matplotlib import pyplot
+from gp import GaussianProcess, sqexp1D_covariancef
 
 
 if __name__ == "__main__":
@@ -16,16 +16,16 @@ if __name__ == "__main__":
     # Plot predictions and samples from the Gaussian Process
     q = np.arange(-1.2, 1.2, 0.051)
     mean, cov = gp.predict(q, cov=True)
-    # assert (mean == gp.predict(q)).all()
+    assert (mean == gp.predict(q)).all()
 
-    # sig_bnd = np.sqrt(np.diag(cov))
+    sig_bnd = np.sqrt(np.diag(cov))
 
-    # for s in np.random.multivariate_normal(mean, cov, 5):
-    #     pyplot.plot(q, s, 'y-')
+    for s in np.random.multivariate_normal(mean, cov, 5):
+        pyplot.plot(q, s, 'y-')
     
-    # pyplot.plot(x, t, '.')
-    # pyplot.plot(q, mean, 'r-')
-    # pyplot.plot(q, mean + 2*sig_bnd, 'k-')
-    # pyplot.plot(q, mean - 2*sig_bnd, 'k-')
-    # pyplot.show(block=True)
-    # 
+    pyplot.plot(x, t, '.')
+    pyplot.plot(q, mean, 'r-')
+    pyplot.plot(q, mean + 2*sig_bnd, 'k-')
+    pyplot.plot(q, mean - 2*sig_bnd, 'k-')
+    pyplot.show(block=True)
+    
