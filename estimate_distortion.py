@@ -150,41 +150,40 @@ def main():
     mapped_points = np.array([ p / p[2] for p in mapped_points ])
     mapped_points = mapped_points[:,:2]
 
-    image_points = np.array([ homogeneous_coords(d.c) for d in detections ])
-    image_points = image_points[:,:2]
-    distortion = mapped_points - image_points # image + distortion = mapped
+    image_points = np.array([ d.c for d in detections ])
+    undistortion = mapped_points - image_points # image + undistortion = mapped
     
     #--------------------------------------
-    class GPDistortionModel(object):
+    class GPModel(object):
     #--------------------------------------
-        def __init__(self, im_points, distortions):
-            assert len(im_points) == len(distortions)
+        def __init__(self, im_points, values):
+            assert len(im_points) == len(values)
 
             X = im_points
             S = np.cov(X.T)
                     
-            meanD = np.mean(distortions, axis=0)
-            D = distortions - np.tile(meanD, (len(distortions), 1))
+            meanV = np.mean(values, axis=0)
+            V = values - np.tile(meanV, (len(values), 1))
 
-            theta0 = D[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
-            gp_dx = GaussianProcess.fit(X, D[:,0], sqexp2D_covariancef, theta0)
+            theta0 = V[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            gp_x = GaussianProcess.fit(X, V[:,0], sqexp2D_covariancef, theta0)
 
-            theta0 = D[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
-            gp_dy = GaussianProcess.fit(X, D[:,1], sqexp2D_covariancef, theta0)
+            theta0 = V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            gp_y = GaussianProcess.fit(X, V[:,1], sqexp2D_covariancef, theta0)
 
-            self.meanD_ = meanD
-            self.gp_dx_ = gp_dx
-            self.gp_dy_ = gp_dy
+            self.meanV_ = meanV
+            self.gp_x_ = gp_x
+            self.gp_y_ = gp_y
 
         def predict(self, X):
-            D = np.vstack([ self.gp_dx_.predict(X), self.gp_dy_.predict(X) ]).T
-            return D + np.tile(self.meanD_, (len(X), 1))
+            V = np.vstack([ self.gp_x_.predict(X), self.gp_y_.predict(X) ]).T
+            return V + np.tile(self.meanV_, (len(X), 1))
 
-    model = GPDistortionModel(image_points, distortion)
+    model = GPModel(image_points, undistortion)
     print '\nGP Hyper-parameters'
     print '---------------------'
-    print '  x: ', model.gp_dx_.covf.theta
-    print '  y: ', model.gp_dy_.covf.theta
+    print '  x: ', model.gp_x_.covf.theta
+    print '  y: ', model.gp_y_.covf.theta
 
 
     if True:
@@ -195,16 +194,18 @@ def main():
         plt.imshow(np.flipud(im), cmap='bone')
 
         plt.subplot(223)
+        plt.title('Estimates')
         h1, = plt.plot(train_i[:,0], train_i[:,1], 'b+')
         h2, = plt.plot(validate_i[:,0], validate_i[:,1], 'bo')
         plt.legend([h1, h2], ['train', 'validate'], fontsize='xx-small')
 
         X, Y = image_points[:,0], image_points[:,1]
-        U, V = distortion[:,0], distortion[:,1]
+        U, V = undistortion[:,0], undistortion[:,1]
         plt.quiver(X, Y, U, V, units='xy', color='r', width=2)
         plt.axis('equal')
 
         plt.subplot(224)
+        plt.title('Undistortion Model')
         H, W = im.shape
         grid = np.array([[x, y] for y in xrange(0, H, 20) for x in xrange(0, W, 20)])
         predicted = model.predict(grid)
