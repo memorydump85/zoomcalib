@@ -31,19 +31,47 @@ class sqexp2D_covariancef(object):
 
 def py_gram_matrix_sq_exp_2D(data,
     sigma_f, sigma_xx, sigma_yy, corr_xy, noise_precision):
-	covf = sqexp2D_covariancef(
-			[sigma_f, sigma_xx, sigma_yy, corr_xy, noise_precision])
+    covf = sqexp2D_covariancef(
+            [sigma_f, sigma_xx, sigma_yy, corr_xy, noise_precision])
 
-	N = len(data)
-	C = np.array([
+    N = len(data)
+    C = np.array([
             covf(data[i], data[j], colocated=(i==j))
             for i in xrange(0, N) for j in xrange (0, N)
                 ]).reshape(N,N)
 
-	return C
+    return C
+
+
+#--------------------------------------
+class sqexp1D_covariancef(object):
+#--------------------------------------
+    def __init__(self, theta):
+        self.theta = theta
+        self.fsig, self.sig, self.noise_prec = theta
+    
+    def __call__(self, a, b, colocated):    
+        z = a - b
+        v = (self.fsig*self.fsig)* np.exp(-0.5*(z*z)/(self.sig*self.sig))
+        return v + 1./(self.noise_prec*self.noise_prec) if colocated else v 
+
+
+def py_gram_matrix_sq_exp_1D(data,
+    sigma_f, sigma_x, noise_precision):
+    covf = sqexp1D_covariancef(
+            [sigma_f, sigma_x, noise_precision])
+
+    N = len(data)
+    C = np.array([
+            covf(data[i], data[j], colocated=(i==j))
+            for i in xrange(0, N) for j in xrange (0, N)
+                ]).reshape(N,N)
+
+    return C
 
 
 
+print '\n--2D--------------------\n'
 data = np.random.randn(2,2)
 
 t0 = time()
@@ -52,6 +80,21 @@ print '  py: %.4fs' % (time()-t0)
 
 t0 = time()
 cyG = gram_matrix.gram_matrix_sq_exp_2D(data, 1, 1, 1, 0, 10)
+print '  cy: %.4fs' % (time()-t0)
+
+print 'py:\n', pyG
+print 'cy:\n', cyG
+
+
+print '\n--1D--------------------\n'
+data = np.random.randn(5)
+
+t0 = time()
+pyG = py_gram_matrix_sq_exp_1D(data, 1, 1, 10)
+print '  py: %.4fs' % (time()-t0)
+
+t0 = time()
+cyG = gram_matrix.gram_matrix_sq_exp_1D(data, 1, 1, 10)
 print '  cy: %.4fs' % (time()-t0)
 
 print 'py:\n', pyG
