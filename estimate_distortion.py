@@ -1,4 +1,5 @@
 import numpy as np
+from math import sqrt
 from itertools import chain
 from skimage.io import imread
 from skimage.color import rgb2gray
@@ -25,7 +26,7 @@ def main():
     #    are variables in world space, units are meters
     #
     
-    im = imread('/var/tmp/datasets/tamron-2.2/im000.png')
+    im = imread('/var/tmp/datasets/tamron-2.2/im001.png')
     im = rgb2gray(im)
     im = img_as_ubyte(im)
     
@@ -55,9 +56,8 @@ def main():
     #   Next, find where the image center `c_i` projects to in world coordinates (`c_w`)
     #   Finally, find the local homography `LH0` from world to image at `c_w`
     #
-    # The homography learning process involves finding the weighting
-    # function parameter that minimizes reprojection error on the
-    # validation points.
+    # To learn the homography, we find the weighting function parameter
+    # that minimizes reprojection error on the validation points.
     #
     mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
 
@@ -68,7 +68,7 @@ def main():
 
     def create_local_homography_object(bandwidth):
         H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth=bandwidth))
-        H.regularization_lambda = 1e-6
+        H.regularization_lambda = 1e-8
         return H
 
     def local_homography_error(bandwidth, t_src, t_tgt, v_src, v_tgt):
@@ -148,40 +148,70 @@ def main():
     world_points = np.array([ homogeneous_coords(mosaic_pos(d)) for d in detections ])
     mapped_points = LH0.dot(world_points.T).T
     mapped_points = np.array([ p / p[2] for p in mapped_points ])
+    mapped_points = mapped_points[:,:2]
 
     image_points = np.array([ homogeneous_coords(d.c) for d in detections ])
-    undistortion = image_points[:,:2] - mapped_points[:,:2] # mapped + undistortion = image
+    image_points = image_points[:,:2]
+    distortion = mapped_points - image_points # image + distortion = mapped
     
-    np.save('image_points', image_points[:,:2])
-    np.save('undistortion', undistortion)
+    #--------------------------------------
+    class GPDistortionModel(object):
+    #--------------------------------------
+        def __init__(self, im_points, distortions):
+            assert len(im_points) == len(distortions)
+
+            X = im_points
+            S = np.cov(X.T)
+                    
+            meanD = np.mean(distortions, axis=0)
+            D = distortions - np.tile(meanD, (len(distortions), 1))
+
+            theta0 = D[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            gp_dx = GaussianProcess.fit(X, D[:,0], sqexp2D_covariancef, theta0)
+
+            theta0 = D[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            gp_dy = GaussianProcess.fit(X, D[:,1], sqexp2D_covariancef, theta0)
+
+            self.meanD_ = meanD
+            self.gp_dx_ = gp_dx
+            self.gp_dy_ = gp_dy
+
+        def predict(self, X):
+            D = np.vstack([ self.gp_dx_.predict(X), self.gp_dy_.predict(X) ]).T
+            return D + np.tile(self.meanD_, (len(X), 1))
+
+    model = GPDistortionModel(image_points, distortion)
+    print '\nGP Hyper-parameters'
+    print '---------------------'
+    print '  x: ', model.gp_dx_.covf.theta
+    print '  y: ', model.gp_dy_.covf.theta
 
 
-    # gp_ux = GaussianProcess.fit(x, u[:,0], sqexp2D_covariancef, [1., 1., 1., 0., 10.])
-    # print gp_ux.covf.theta
-    # gp_uy = GaussianProcess.fit(x, u[:,1], sqexp2D_covariancef, [1., 1., 1., 0., 10.])
-    # print gp_uy.covf.theta
-   
     if True:
         from skimage.filters import scharr
         from matplotlib import pyplot as plt
 
-        plt.subplot(121)
-        #plt.imshow(1.-scharr(im), cmap='bone')
-        plt.plot(train_i[:,0], train_i[:,1], 'b+')
-        plt.plot(validate_i[:,0], validate_i[:,1], 'bo')
+        plt.subplot(221)
+        plt.imshow(np.flipud(im), cmap='bone')
+
+        plt.subplot(223)
+        h1, = plt.plot(train_i[:,0], train_i[:,1], 'b+')
+        h2, = plt.plot(validate_i[:,0], validate_i[:,1], 'bo')
+        plt.legend([h1, h2], ['train', 'validate'], fontsize='xx-small')
 
         X, Y = image_points[:,0], image_points[:,1]
-        U, V = undistortion[:,0], undistortion[:,1]
-        plt.quiver(X, Y, U, V, units='xy', color='r', width=3)
+        U, V = distortion[:,0], distortion[:,1]
+        plt.quiver(X, Y, U, V, units='xy', color='r', width=2)
         plt.axis('equal')
 
-        # plt.subplot(122)
-        # eval_points = np.mgrid[0:im.shape[0]:40, 0:im.shape[1]:40].reshape(2, -1).T *.1
-        # undistortion_predicted = np.vstack((gp_ux.predict(eval_points), gp_uy.predict(eval_points)))
-        # X, Y = eval_points[:,0], eval_points[:,1]
-        # U, V = undistortion_predicted[:,0], undistortion_predicted[:,1]
-        # plt.quiver(X, Y, U, V, units='xy', color='r', width=3)
-        # plt.axis('equal')        
+        plt.subplot(224)
+        H, W = im.shape
+        grid = np.array([[x, y] for y in xrange(0, H, 20) for x in xrange(0, W, 20)])
+        predicted = model.predict(grid)
+        X, Y = grid[:,0], grid[:,1]
+        U, V = predicted[:,0], predicted[:,1]
+        plt.quiver(X, Y, U, V, units='xy', color='r', width=2)
+        plt.axis('equal')        
 
         plt.show()
 
