@@ -26,7 +26,7 @@ def main():
     #    are variables in world space, units are meters
     #
     
-    im = imread('/var/tmp/datasets/tamron-2.2/im001.png')
+    im = imread('/var/tmp/capture/70.png')
     im = rgb2gray(im)
     im = img_as_ubyte(im)
     
@@ -165,10 +165,10 @@ def main():
             meanV = np.mean(values, axis=0)
             V = values - np.tile(meanV, (len(values), 1))
 
-            theta0 = V[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            theta0 = np.array(( V[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
             gp_x = GaussianProcess.fit(X, V[:,0], sqexp2D_covariancef, theta0)
 
-            theta0 = V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10.
+            theta0 = np.array(( V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
             gp_y = GaussianProcess.fit(X, V[:,1], sqexp2D_covariancef, theta0)
 
             self.meanV_ = meanV
@@ -179,11 +179,22 @@ def main():
             V = np.vstack([ self.gp_x_.predict(X), self.gp_y_.predict(X) ]).T
             return V + np.tile(self.meanV_, (len(X), 1))
 
+    
     model = GPModel(image_points, undistortion)
+    
+    import textwrap
     print '\nGP Hyper-parameters'
     print '---------------------'
     print '  x: ', model.gp_x_.covf.theta
+    print '        log-likelihood: %.4f' % model.gp_x_.model_evidence()
     print '  y: ', model.gp_y_.covf.theta
+    print '        log-likelihood: %.4f' % model.gp_y_.model_evidence()
+    print ''
+    print '  Optimization detail:'
+    print '  [ x ]'
+    print str(model.gp_x_.fit_result_).replace('\n', '\n      ')
+    print '  [ y ]'
+    print str(model.gp_y_.fit_result_).replace('\n', '\n      ')
 
 
     if True:
@@ -201,19 +212,20 @@ def main():
 
         X, Y = image_points[:,0], image_points[:,1]
         U, V = undistortion[:,0], undistortion[:,1]
-        plt.quiver(X, Y, U, V, units='xy', color='r', width=2)
+        plt.quiver(X, Y, U, V, units='dots', color='r', width=1)
         plt.axis('equal')
 
         plt.subplot(224)
         plt.title('Undistortion Model')
         H, W = im.shape
-        grid = np.array([[x, y] for y in xrange(0, H, 20) for x in xrange(0, W, 20)])
+        grid = np.array([[x, y] for y in xrange(0, H, 50) for x in xrange(0, W, 50)])
         predicted = model.predict(grid)
         X, Y = grid[:,0], grid[:,1]
         U, V = predicted[:,0], predicted[:,1]
-        plt.quiver(X, Y, U, V, units='xy', color='r', width=2)
+        plt.quiver(X, Y, U, V, units='dots', color='r', width=1)
         plt.axis('equal')        
 
+        plt.tight_layout()
         plt.show()
 
 

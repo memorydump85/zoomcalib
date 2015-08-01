@@ -17,6 +17,7 @@ class GaussianProcess(object):
         self.covf = covf
         self.C = None
         self.Cinvt = None
+        self.fit_result_ = None
 
         
     def ensure_gram_matrix(self):
@@ -81,11 +82,20 @@ class GaussianProcess(object):
     def fit(cls, x, t, covf, theta0):
         evidence = lambda theta: \
             -cls(x, t, covf(theta)).model_evidence()
-        theta_opt = optimize.fmin_powell(func=evidence, x0=theta0, xtol=0.001, ftol=0.001, disp=False)
         
-        if isinstance(theta_opt.tolist(), float):
-            theta_opt = [theta_opt.tolist()]
-        return cls(x, t, covf(theta_opt))
+        if False:
+            options = { 'xtol': 0.0001, 'ftol': 0.0001 }
+            fit_result_ = optimize.minimize(evidence, x0=theta0, method='Powell', options=options)
+            fit_result_.x0 = theta0
+        else:
+            options = { 'gtol': 1e-05, 'norm': 2 }
+            fit_result_ = optimize.minimize(evidence, x0=theta0, method='CG', options=options)
+            fit_result_.x0 = theta0
+        
+        theta_opt = fit_result_.x
+        new_gp = cls(x, t, covf(theta_opt))
+        new_gp.fit_result_ = fit_result_
+        return new_gp
 
 
 #--------------------------------------
