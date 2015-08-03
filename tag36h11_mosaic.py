@@ -17,3 +17,9 @@ class TagMosaic(object):
 	def get_position_meters(self, id):
 		row, col = id % 24, -(id // 24)
 		return row*self.scale, col*self.scale
+
+	def get_row(self, id):
+		return id // 24
+
+	def get_col(self, id):
+		return id % 24

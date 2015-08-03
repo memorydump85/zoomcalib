@@ -3,7 +3,6 @@ from math import sqrt
 from itertools import chain
 from skimage.io import imread
 from skimage.color import rgb2gray
-from skimage.util import img_as_ubyte
 from scipy.optimize import minimize, minimize_scalar
 from sklearn.preprocessing import StandardScaler
 
@@ -14,10 +13,10 @@ from gp import GaussianProcess, sqexp2D_covariancef
 
 
 
-np.set_printoptions(precision=4)
+np.set_printoptions(precision=4, suppress=True)
 
 
-def main():
+def process(filename):
     #
     # Conventions:
     # a_i, b_i
@@ -25,26 +24,30 @@ def main():
     # a_w, b_w
     #    are variables in world space, units are meters
     #
-    
-    im = imread('/var/tmp/capture/70.png')
+    print '\n========================================'
+    print '  File: ' + filename
+    print '========================================\n'
+
+    im = imread(filename)
     im = rgb2gray(im)
-    im = img_as_ubyte(im)
+    im = (im * 255.).astype(np.uint8)
     
     c_i = np.array([im.shape[1], im.shape[0]]) / 2.
 
     tag_mosaic = TagMosaic(0.0254)
     detections = AprilTagDetector().detect(im)
+    print '  %d tags detected.' % len(detections)
 
     # Sort detections by distance to center
     dist = lambda p_i: np.linalg.norm(p_i - c_i)
     closer_to_center = lambda d1, d2: int(dist(d1.c) - dist(d2.c))
     detections.sort(cmp=closer_to_center)
 
-    # Space out the validation samples equally in theta
+    # 1 in 10 detections is used for validation
+    # We also want to keep the detection closest to the center for validation
     v_ixs = range(len(detections))
-    theta = lambda index: np.arctan2(*(detections[index].c-c_i))
-    v_ixs.sort(key=theta)
-    v_ixs = v_ixs[11::7] + [0] # include detection closest to center
+    v_ixs = np.random.choice(v_ixs[10:], len(detections)/10, replace=False).tolist()
+    v_ixs += [0] # detection closest to center
     detections_validate = [ detections[i] for i in v_ixs ]
 
     t_ixs = set(range(len(detections))) - set(v_ixs)
@@ -68,7 +71,7 @@ def main():
 
     def create_local_homography_object(bandwidth):
         H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth=bandwidth))
-        H.regularization_lambda = 1e-8
+        H.regularization_lambda = 1e-3
         return H
 
     def local_homography_error(bandwidth, t_src, t_tgt, v_src, v_tgt):
@@ -99,7 +102,7 @@ def main():
                     method='Bounded',
                     bounds=(1e-4, 1e4),
                     args=(train_i, train_w, validate_i, validate_w),
-                    tol=1e-4 )
+                    options={'xatol': 1e-4} )
         
         print '\nHomography: i->w'
         print '------------------'
@@ -116,7 +119,7 @@ def main():
                     method='Bounded',
                     bounds=(1e-4, 1e4),
                     args=(train_w, train_i, validate_w, validate_i),
-                    tol=1e-4 )
+                    options={'xatol': 1e-4} )
         
         print '\nHomography: w->i'
         print '------------------'
@@ -152,7 +155,12 @@ def main():
 
     image_points = np.array([ d.c for d in detections ])
     undistortion = mapped_points - image_points # image + undistortion = mapped
+
+
+    max_distortion = np.max([np.linalg.norm(u) for u in undistortion])
+    print '\nMaximum distortion is %.2f pixels' % max_distortion
     
+
     #--------------------------------------
     class GPModel(object):
     #--------------------------------------
@@ -197,37 +205,94 @@ def main():
     print str(model.gp_y_.fit_result_).replace('\n', '\n      ')
 
 
+    #   Visualization
     if True:
         from skimage.filters import scharr
         from matplotlib import pyplot as plt
 
-        plt.subplot(221)
-        plt.imshow(np.flipud(im), cmap='bone')
+        plt.style.use('ggplot')
 
+        #__1__
+        plt.subplot(221)
+        plt.title(filename.split('/')[-1])
+        plt.imshow(im, cmap='gray')
+        plt.plot(image_points[:,0], image_points[:,1], 'o')
+        # for i, d in enumerate(detections):
+        #     plt.text(d.c[0], d.c[1], str(d.id),
+        #         fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
+        plt.grid()
+        plt.axis('equal')
+
+        #__2__
+        plt.subplot(222)
+        plt.title('Non-linear Homography')
+        plt.imshow(1.-scharr(im), cmap='bone', interpolation='gaussian')
+
+        from collections import defaultdict
+        row_groups = defaultdict(list)
+        col_groups = defaultdict(list)
+
+        for d in detections:
+            row, col = tag_mosaic.get_row(d.id), tag_mosaic.get_col(d.id)
+            row_groups[row] += [ d.id ]
+            col_groups[col] += [ d.id ]
+
+        for k, v in row_groups.iteritems():
+            a = tag_mosaic.get_position_meters(np.min(v))
+            b = tag_mosaic.get_position_meters(np.max(v))
+            x_coords = np.linspace(a[0], b[0], 100)
+            points = np.array([ H_wi.map([x, a[1]]) for x in x_coords ])
+            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+
+        for k, v in col_groups.iteritems():
+            a = tag_mosaic.get_position_meters(np.min(v))
+            b = tag_mosaic.get_position_meters(np.max(v))
+            y_coords = np.linspace(a[1], b[1], 100)
+            points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
+            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+        
+        plt.plot(image_points[:,0], image_points[:,1], 'kx')
+        plt.grid()
+        plt.axis('equal')
+
+        #__3__
         plt.subplot(223)
         plt.title('Estimates')
-        h1, = plt.plot(train_i[:,0], train_i[:,1], 'b+')
-        h2, = plt.plot(validate_i[:,0], validate_i[:,1], 'bo')
+
+        for i, d in enumerate(detections):
+            plt.text(d.c[0], d.c[1], str(i), fontsize=8, color='#999999')
+
+        h1, = plt.plot(train_i[:,0], train_i[:,1], '+')
+        h2, = plt.plot(validate_i[:,0], validate_i[:,1], 'o')
         plt.legend([h1, h2], ['train', 'validate'], fontsize='xx-small')
 
         X, Y = image_points[:,0], image_points[:,1]
         U, V = undistortion[:,0], undistortion[:,1]
-        plt.quiver(X, Y, U, V, units='dots', color='r', width=1)
+        plt.quiver(X, Y, U, -V, units='dots', width=1)
+        plt.gca().invert_yaxis()
         plt.axis('equal')
 
+        #__4__
         plt.subplot(224)
         plt.title('Undistortion Model')
         H, W = im.shape
-        grid = np.array([[x, y] for y in xrange(0, H, 50) for x in xrange(0, W, 50)])
+        grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
         predicted = model.predict(grid)
         X, Y = grid[:,0], grid[:,1]
         U, V = predicted[:,0], predicted[:,1]
-        plt.quiver(X, Y, U, V, units='dots', color='r', width=1)
+        plt.quiver(X, Y, U, -V, units='dots', color='#CF4457', width=1)
+        plt.gca().invert_yaxis()
         plt.axis('equal')        
 
         plt.tight_layout()
+        plt.gcf().patch.set_facecolor('#dddddd')
         plt.show()
 
+
+def main():
+    from glob import iglob
+    for filename in iglob('/var/tmp/capture/29.png'):
+        process(filename)
 
 if __name__ == '__main__':
     main()
