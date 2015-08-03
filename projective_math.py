@@ -14,11 +14,11 @@ class UnitWeightingFunction(object):
 class SqExpWeightingFunction(object):
     def __init__(self, bandwidth, magnitude=1.):
         self.tau_ = bandwidth
-        self.lambda_ = magnitude
+        self.nu_ = magnitude
 
     def __call__(self, p, q):
         z = np.subtract(p, q) / self.tau_
-        return self.lambda_**2 * np.exp(-(z**2).sum())
+        return self.nu_*self.nu_ * np.exp(-(z*z).sum())
 
 
 def normalization_transform_(points):
@@ -95,9 +95,9 @@ class WeightedLocalHomography(object):
         w_diag = np.sqrt(np.repeat(w_diag, 2))
         assert A.shape[0] == w_diag.shape[0]
 
-        lambdaI = self.regularization_lambda * np.eye(A.shape[0])
+        lambda2I = (self.regularization_lambda*self.regularization_lambda) * np.eye(A.shape[0])
         W = np.diag(w_diag)
-        U, s, V = np.linalg.svd((W + lambdaI).dot(A))
+        U, s, V = np.linalg.svd((W + lambda2I).dot(A))
 
         # Homography is the total least squares solution: The eigen-vector
         # corresponding to the smallest eigen-value

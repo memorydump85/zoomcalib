@@ -46,7 +46,7 @@ def process(filename):
     # 1 in 10 detections is used for validation
     # We also want to keep the detection closest to the center for validation
     v_ixs = range(len(detections))
-    v_ixs = np.random.choice(v_ixs[10:], len(detections)/10, replace=False).tolist()
+    v_ixs = np.random.choice(v_ixs[10:], len(detections)/3, replace=False).tolist()
     v_ixs += [0] # detection closest to center
     detections_validate = [ detections[i] for i in v_ixs ]
 
@@ -54,8 +54,8 @@ def process(filename):
     detections_train = [ detections[i] for i in t_ixs ]
 
     #
-    # In the following section of we learn a bunch of homographies.
-    #   First, we learn a homography from image to world
+    # In the following section,
+    #   We first learn a homography from image to world
     #   Next, find where the image center `c_i` projects to in world coordinates (`c_w`)
     #   Finally, find the local homography `LH0` from world to image at `c_w`
     #
@@ -69,22 +69,32 @@ def process(filename):
     validate_i = np.array([ d.c for d in detections_validate ])
     validate_w = np.array([ mosaic_pos(d) for d in detections_validate ])
 
-    def create_local_homography_object(bandwidth):
-        H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth=bandwidth))
-        H.regularization_lambda = 1e-3
+    def create_local_homography_object(bandwidth, magnitude, lambda_):
+        H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth, magnitude))
+        H.regularization_lambda = lambda_
         return H
 
-    def local_homography_error(bandwidth, t_src, t_tgt, v_src, v_tgt):
+    def local_homography_error(theta, args):
         """ 
-        This is the objective function used for optimizing the `bandwidth`
-        parameter of the `SqExpWeightingFunction`
+        This is the objective function used for optimizing parameters of
+        the `SqExpWeightingFunction` usef for local homography fitting
 
         Parameters:
         -----------
-            `t_src`, `t_tgt`: lists of training source and target points
-            `v_src`, `v_tgt`: lists of validation source and target points
+           `theta` = [ `bandwidth`, `magnitude`, `lambda_` ]:
+                parameters of the `SqExpWeightingFunction`
+
+        Arguments:
+        -----------
+            `args` = [ `t_src`, `t_tgt`, `v_src`, `v_tgt` ]
+                `t_src`: list of training source points
+                `t_tgt`: list of training target points
+                `v_src`: list of validation source points
+                `v_tgt`: list of validation target points
         """
-        H = create_local_homography_object(bandwidth)
+        t_src, t_tgt, v_src, v_tgt = args
+
+        H = create_local_homography_object(*theta)
         for s, t in zip(t_src, t_tgt):
             H.add_correspondence(s, t)
 
@@ -98,34 +108,40 @@ def process(filename):
         return np.sqrt(sse/N)
 
     def learn_homography_i2w():
-        result = minimize_scalar( local_homography_error,
-                    method='Bounded',
-                    bounds=(1e-4, 1e4),
-                    args=(train_i, train_w, validate_i, validate_w),
-                    options={'xatol': 1e-4} )
+        result = minimize( local_homography_error,
+                    x0=[ 50, 1, 1e-3 ],
+                    args=[ train_i, train_w, validate_i, validate_w ],
+                    method='Powell',
+                    options={'ftol': 1e-3} )
         
         print '\nHomography: i->w'
         print '------------------'
-        print result
+        print '  params:', result.x
+        print '   error: %.6f' % result.fun
+        print '\n  Optimization detail:'
+        print '  ' + str(result).replace('\n', '\n      ')
 
-        H = create_local_homography_object(bandwidth=result.x)
+        H = create_local_homography_object(*result.x)
         for i, w in zip(chain(train_i, validate_i), chain(train_w, validate_w)):
             H.add_correspondence(i, w)
 
         return H
 
     def learn_homography_w2i():
-        result = minimize_scalar( local_homography_error,
-                    method='Bounded',
-                    bounds=(1e-4, 1e4),
-                    args=(train_w, train_i, validate_w, validate_i),
-                    options={'xatol': 1e-4} )
+        result = minimize( local_homography_error,
+                    x0=[ 0.0254, 1, 1e-3 ],
+                    method='Powell',
+                    args=[ train_w, train_i, validate_w, validate_i ],
+                    options={'ftol': 1e-3} )
         
         print '\nHomography: w->i'
         print '------------------'
-        print result
+        print '  params:', result.x
+        print '   error: %.6f' % result.fun
+        print '\n  Optimization detail:'
+        print '  ' + str(result).replace('\n', '\n      ')
         
-        H = create_local_homography_object(bandwidth=result.x)
+        H = create_local_homography_object(*result.x)
         for w, i in zip(chain(train_w, validate_w), chain(train_i, validate_i)):
             H.add_correspondence(w, i)
 
@@ -190,7 +206,6 @@ def process(filename):
     
     model = GPModel(image_points, undistortion)
     
-    import textwrap
     print '\nGP Hyper-parameters'
     print '---------------------'
     print '  x: ', model.gp_x_.covf.theta
@@ -200,9 +215,9 @@ def process(filename):
     print ''
     print '  Optimization detail:'
     print '  [ x ]'
-    print str(model.gp_x_.fit_result_).replace('\n', '\n      ')
+    print '  ' + str(model.gp_x_.fit_result_).replace('\n', '\n      ')
     print '  [ y ]'
-    print str(model.gp_y_.fit_result_).replace('\n', '\n      ')
+    print '  ' + str(model.gp_y_.fit_result_).replace('\n', '\n      ')
 
 
     #   Visualization
@@ -226,38 +241,40 @@ def process(filename):
         #__2__
         plt.subplot(222)
         plt.title('Non-linear Homography')
-        plt.imshow(1.-scharr(im), cmap='bone', interpolation='gaussian')
 
-        from collections import defaultdict
-        row_groups = defaultdict(list)
-        col_groups = defaultdict(list)
+        if False:
+            plt.imshow(1.-scharr(im), cmap='bone', interpolation='gaussian')
 
-        for d in detections:
-            row, col = tag_mosaic.get_row(d.id), tag_mosaic.get_col(d.id)
-            row_groups[row] += [ d.id ]
-            col_groups[col] += [ d.id ]
+            from collections import defaultdict
+            row_groups = defaultdict(list)
+            col_groups = defaultdict(list)
 
-        for k, v in row_groups.iteritems():
-            a = tag_mosaic.get_position_meters(np.min(v))
-            b = tag_mosaic.get_position_meters(np.max(v))
-            x_coords = np.linspace(a[0], b[0], 100)
-            points = np.array([ H_wi.map([x, a[1]]) for x in x_coords ])
-            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+            for d in detections:
+                row, col = tag_mosaic.get_row(d.id), tag_mosaic.get_col(d.id)
+                row_groups[row] += [ d.id ]
+                col_groups[col] += [ d.id ]
 
-        for k, v in col_groups.iteritems():
-            a = tag_mosaic.get_position_meters(np.min(v))
-            b = tag_mosaic.get_position_meters(np.max(v))
-            y_coords = np.linspace(a[1], b[1], 100)
-            points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
-            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
-        
-        plt.plot(image_points[:,0], image_points[:,1], 'kx')
-        plt.grid()
-        plt.axis('equal')
+            for k, v in row_groups.iteritems():
+                a = tag_mosaic.get_position_meters(np.min(v))
+                b = tag_mosaic.get_position_meters(np.max(v))
+                x_coords = np.linspace(a[0], b[0], 100)
+                points = np.array([ H_wi.map([x, a[1]]) for x in x_coords ])
+                plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+
+            for k, v in col_groups.iteritems():
+                a = tag_mosaic.get_position_meters(np.min(v))
+                b = tag_mosaic.get_position_meters(np.max(v))
+                y_coords = np.linspace(a[1], b[1], 100)
+                points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
+                plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+            
+            plt.plot(image_points[:,0], image_points[:,1], 'kx')
+            plt.grid()
+            plt.axis('equal')
 
         #__3__
         plt.subplot(223)
-        plt.title('Estimates')
+        plt.title('Qualitative Estimates')
 
         for i, d in enumerate(detections):
             plt.text(d.c[0], d.c[1], str(i), fontsize=8, color='#999999')
@@ -268,20 +285,24 @@ def process(filename):
 
         X, Y = image_points[:,0], image_points[:,1]
         U, V = undistortion[:,0], undistortion[:,1]
-        plt.quiver(X, Y, U, -V, units='dots', width=1)
+        plt.quiver(X, Y, U, -V, units='dots')
+        # plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1) # plot exact
         plt.gca().invert_yaxis()
         plt.axis('equal')
 
         #__4__
         plt.subplot(224)
-        plt.title('Undistortion Model')
+        plt.title('Qualitative Undistortion')
         H, W = im.shape
         grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
         predicted = model.predict(grid)
         X, Y = grid[:,0], grid[:,1]
         U, V = predicted[:,0], predicted[:,1]
-        plt.quiver(X, Y, U, -V, units='dots', color='#CF4457', width=1)
+        plt.quiver(X, Y, U, -V, units='dots')
+        #plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1)) # plot exact
         plt.gca().invert_yaxis()
+        plt.text( 0.5, 0.5, 'max distortion: %.2f' % max_distortion, color='#CF4457', fontsize=8,
+            horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
         plt.axis('equal')        
 
         plt.tight_layout()
@@ -291,7 +312,7 @@ def process(filename):
 
 def main():
     from glob import iglob
-    for filename in iglob('/var/tmp/capture/29.png'):
+    for filename in iglob('/var/tmp/capture/50.png'):
         process(filename)
 
 if __name__ == '__main__':
