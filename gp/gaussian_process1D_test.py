@@ -9,7 +9,7 @@ if __name__ == "__main__":
     t = np.array(map(lambda a: a**2 + 0.05*np.random.randn(), x))
     t = t - np.mean(t)
         
-    # Find the best set of hyper-parameters        
+    # Find the best set of hyper-parameters
     theta0 = [np.std(t), 1, 10]
     gp = GaussianProcess.fit(x, t, sqexp1D_covariancef, theta0)
     
@@ -28,4 +28,3 @@ if __name__ == "__main__":
     pyplot.plot(q, mean + 2*sig_bnd, 'k-')
     pyplot.plot(q, mean - 2*sig_bnd, 'k-')
     pyplot.show(block=True)
-    

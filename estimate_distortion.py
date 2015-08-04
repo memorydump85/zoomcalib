@@ -1,10 +1,11 @@
+from sys import stdout
 import numpy as np
 from math import sqrt
 from itertools import chain
 from skimage.io import imread
 from skimage.color import rgb2gray
 from scipy.optimize import minimize, minimize_scalar
-from sklearn.preprocessing import StandardScaler
+from sklearn.cross_validation import KFold
 
 from apriltag import AprilTagDetector
 from projective_math import WeightedLocalHomography, SqExpWeightingFunction
@@ -14,6 +15,49 @@ from gp import GaussianProcess, sqexp2D_covariancef
 
 
 np.set_printoptions(precision=4, suppress=True)
+
+
+def create_local_homography_object(bandwidth, magnitude, lambda_):
+    """
+    Helper function for creating WeightedLocalHomography objects
+    """
+    H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth, magnitude))
+    H.regularization_lambda = lambda_
+    return H
+
+
+def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
+    """ 
+    This is the objective function used for optimizing parameters of
+    the `SqExpWeightingFunction` usef for local homography fitting
+
+    Parameters:
+    -----------
+       `theta` = [ `bandwidth`, `magnitude`, `lambda_` ]:
+            parameters of the `SqExpWeightingFunction`
+
+    Arguments:
+    -----------
+        `t_src`: list of training source points
+        `t_tgt`: list of training target points
+        `v_src`: list of validation source points
+        `v_tgt`: list of validation target points
+    """
+    H = create_local_homography_object(*theta)
+    for s, t in zip(t_src, t_tgt):
+        H.add_correspondence(s, t)
+
+    sqerr = lambda a, b: np.linalg.norm(a-b)**2
+    v_mapped = ( H.map(s)[:2] for s in v_src )
+    mse = np.mean([ sqerr(m, t) for m, t in zip(v_mapped, v_tgt) ])
+    return sqrt(mse)
+
+
+def local_homography_cv_error(theta, args):
+    src, tgt = args
+    errs = [ local_homography_error(theta, src[ixt], tgt[ixt], src[ixv], tgt[ixv])
+                for ixt, ixv in KFold(len(src), n_folds=10, shuffle=True) ]
+    return np.mean(errs)
 
 
 def process(filename):
@@ -38,79 +82,20 @@ def process(filename):
     detections = AprilTagDetector().detect(im)
     print '  %d tags detected.' % len(detections)
 
-    # Sort detections by distance to center
-    dist = lambda p_i: np.linalg.norm(p_i - c_i)
-    closer_to_center = lambda d1, d2: int(dist(d1.c) - dist(d2.c))
-    detections.sort(cmp=closer_to_center)
-
-    # 1 in 10 detections is used for validation
-    # We also want to keep the detection closest to the center for validation
-    v_ixs = range(len(detections))
-    v_ixs = np.random.choice(v_ixs[10:], len(detections)/3, replace=False).tolist()
-    v_ixs += [0] # detection closest to center
-    detections_validate = [ detections[i] for i in v_ixs ]
-
-    t_ixs = set(range(len(detections))) - set(v_ixs)
-    detections_train = [ detections[i] for i in t_ixs ]
-
-    #
-    # In the following section,
-    #   We first learn a homography from image to world
-    #   Next, find where the image center `c_i` projects to in world coordinates (`c_w`)
-    #   Finally, find the local homography `LH0` from world to image at `c_w`
-    #
-    # To learn the homography, we find the weighting function parameter
-    # that minimizes reprojection error on the validation points.
-    #
     mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
 
-    train_i = np.array([ d.c for d in detections_train ])
-    train_w = np.array([ mosaic_pos(d) for d in detections_train ])
-    validate_i = np.array([ d.c for d in detections_validate ])
-    validate_w = np.array([ mosaic_pos(d) for d in detections_validate ])
+    det_i = np.array([ d.c for d in detections ])
+    det_w = np.array([ mosaic_pos(d) for d in detections ])    
 
-    def create_local_homography_object(bandwidth, magnitude, lambda_):
-        H = WeightedLocalHomography(SqExpWeightingFunction(bandwidth, magnitude))
-        H.regularization_lambda = lambda_
-        return H
-
-    def local_homography_error(theta, args):
-        """ 
-        This is the objective function used for optimizing parameters of
-        the `SqExpWeightingFunction` usef for local homography fitting
-
-        Parameters:
-        -----------
-           `theta` = [ `bandwidth`, `magnitude`, `lambda_` ]:
-                parameters of the `SqExpWeightingFunction`
-
-        Arguments:
-        -----------
-            `args` = [ `t_src`, `t_tgt`, `v_src`, `v_tgt` ]
-                `t_src`: list of training source points
-                `t_tgt`: list of training target points
-                `v_src`: list of validation source points
-                `v_tgt`: list of validation target points
-        """
-        t_src, t_tgt, v_src, v_tgt = args
-
-        H = create_local_homography_object(*theta)
-        for s, t in zip(t_src, t_tgt):
-            H.add_correspondence(s, t)
-
-        sqerr = lambda a, b: np.linalg.norm(a-b)**2
-        sse = 0.
-        for s, t in zip(v_src, v_tgt):
-            m = H.map(s)[:2]
-            sse += sqerr(m, t)
-
-        N = len(v_src)
-        return np.sqrt(sse/N)
-
+    #
+    # To learn a weighted local homography, we find the weighting
+    # function parameters that minimize reprojection error across
+    # validation folds of the data.
+    #
     def learn_homography_i2w():
-        result = minimize( local_homography_error,
+        result = minimize( local_homography_cv_error,
                     x0=[ 50, 1, 1e-3 ],
-                    args=[ train_i, train_w, validate_i, validate_w ],
+                    args=[ det_i, det_w ],
                     method='Powell',
                     options={'ftol': 1e-3} )
         
@@ -122,16 +107,16 @@ def process(filename):
         print '  ' + str(result).replace('\n', '\n      ')
 
         H = create_local_homography_object(*result.x)
-        for i, w in zip(chain(train_i, validate_i), chain(train_w, validate_w)):
+        for i, w in zip(det_i, det_w):
             H.add_correspondence(i, w)
 
         return H
 
     def learn_homography_w2i():
-        result = minimize( local_homography_error,
+        result = minimize( local_homography_cv_error,
                     x0=[ 0.0254, 1, 1e-3 ],
                     method='Powell',
-                    args=[ train_w, train_i, validate_w, validate_i ],
+                    args=[ det_w, det_i ],
                     options={'ftol': 1e-3} )
         
         print '\nHomography: w->i'
@@ -142,21 +127,26 @@ def process(filename):
         print '  ' + str(result).replace('\n', '\n      ')
         
         H = create_local_homography_object(*result.x)
-        for w, i in zip(chain(train_w, validate_w), chain(train_i, validate_i)):
+        for w, i in zip(det_w, det_i):
             H.add_correspondence(w, i)
 
         return H
 
-    # Map center `c_i` to world coords to get `c_w`.
-    # Then compute homography at `c_w`
+    #
+    # We assume that the distortion is zero at the center of
+    # the image and we are interesting in the word to image
+    # homography at the center of the image. However, we don't
+    # know the center of the image in world coordinates.
+    # So we follow the sequence:
+    #
+    # First, we learn a homography from image to world
+    # Next, find where the image center `c_i` maps to in world coordinates (`c_w`)
+    # Finally, find the local homography `LH0` from world to image at `c_w`
+    #
     H_iw = learn_homography_i2w()
     c_w = H_iw.map(c_i)[:2]
     H_wi = learn_homography_w2i()
     LH0 = H_wi.get_homography_at(c_w)
-
-    def homogeneous_coords(p):
-        assert len(p)==2 or len(p)==3
-        return p if len(p)==3 else np.array([p[0], p[1], 1.])
 
     print '\nHomography at center'
     print '----------------------'
@@ -164,15 +154,19 @@ def process(filename):
     print '      c_i =', c_i
     print 'LH0 * c_w =', H_wi.map(c_w)
 
-    world_points = np.array([ homogeneous_coords(mosaic_pos(d)) for d in detections ])
-    mapped_points = LH0.dot(world_points.T).T
-    mapped_points = np.array([ p / p[2] for p in mapped_points ])
-    mapped_points = mapped_points[:,:2]
+    #
+    # Obtain distortion estimate
+    #       detected + undistortion = mapped
+    #  (or) undistortion = mapped - detected
+    #
+    def homogeneous_coords(arr):
+        return np.hstack([ arr, np.ones((len(arr), 1)) ])
 
-    image_points = np.array([ d.c for d in detections ])
-    undistortion = mapped_points - image_points # image + undistortion = mapped
+    mapped_i = LH0.dot(homogeneous_coords(det_w).T).T
+    mapped_i = np.array([ p / p[2] for p in mapped_i ])
+    mapped_i = mapped_i[:,:2]
 
-
+    undistortion = mapped_i - det_i # image + undistortion = mapped
     max_distortion = np.max([np.linalg.norm(u) for u in undistortion])
     print '\nMaximum distortion is %.2f pixels' % max_distortion
     
@@ -180,10 +174,10 @@ def process(filename):
     #--------------------------------------
     class GPModel(object):
     #--------------------------------------
-        def __init__(self, im_points, values):
-            assert len(im_points) == len(values)
+        def __init__(self, points_i, values):
+            assert len(points_i) == len(values)
 
-            X = im_points
+            X = points_i
             S = np.cov(X.T)
                     
             meanV = np.mean(values, axis=0)
@@ -195,29 +189,29 @@ def process(filename):
             theta0 = np.array(( V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
             gp_y = GaussianProcess.fit(X, V[:,1], sqexp2D_covariancef, theta0)
 
-            self.meanV_ = meanV
-            self.gp_x_ = gp_x
-            self.gp_y_ = gp_y
+            self._meanV = meanV
+            self._gp_x = gp_x
+            self._gp_y = gp_y
 
         def predict(self, X):
-            V = np.vstack([ self.gp_x_.predict(X), self.gp_y_.predict(X) ]).T
-            return V + np.tile(self.meanV_, (len(X), 1))
+            V = np.vstack([ self._gp_x.predict(X), self._gp_y.predict(X) ]).T
+            return V + np.tile(self._meanV, (len(X), 1))
 
     
-    model = GPModel(image_points, undistortion)
+    model = GPModel(det_i, undistortion)
     
     print '\nGP Hyper-parameters'
     print '---------------------'
-    print '  x: ', model.gp_x_.covf.theta
-    print '        log-likelihood: %.4f' % model.gp_x_.model_evidence()
-    print '  y: ', model.gp_y_.covf.theta
-    print '        log-likelihood: %.4f' % model.gp_y_.model_evidence()
+    print '  x: ', model._gp_x._covf.theta
+    print '        log-likelihood: %.4f' % model._gp_x.model_evidence()
+    print '  y: ', model._gp_y._covf.theta
+    print '        log-likelihood: %.4f' % model._gp_y.model_evidence()
     print ''
     print '  Optimization detail:'
     print '  [ x ]'
-    print '  ' + str(model.gp_x_.fit_result_).replace('\n', '\n      ')
+    print '  ' + str(model._gp_x.fit_result).replace('\n', '\n      ')
     print '  [ y ]'
-    print '  ' + str(model.gp_y_.fit_result_).replace('\n', '\n      ')
+    print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
 
 
     #   Visualization
@@ -231,7 +225,7 @@ def process(filename):
         plt.subplot(221)
         plt.title(filename.split('/')[-1])
         plt.imshow(im, cmap='gray')
-        plt.plot(image_points[:,0], image_points[:,1], 'o')
+        plt.plot(det_i[:,0], det_i[:,1], 'o')
         # for i, d in enumerate(detections):
         #     plt.text(d.c[0], d.c[1], str(d.id),
         #         fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
@@ -268,7 +262,7 @@ def process(filename):
                 points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
                 plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
             
-            plt.plot(image_points[:,0], image_points[:,1], 'kx')
+            plt.plot(det_i[:,0], det_i[:,1], 'kx')
             plt.grid()
             plt.axis('equal')
 
@@ -279,14 +273,12 @@ def process(filename):
         for i, d in enumerate(detections):
             plt.text(d.c[0], d.c[1], str(i), fontsize=8, color='#999999')
 
-        h1, = plt.plot(train_i[:,0], train_i[:,1], '+')
-        h2, = plt.plot(validate_i[:,0], validate_i[:,1], 'o')
-        plt.legend([h1, h2], ['train', 'validate'], fontsize='xx-small')
-
-        X, Y = image_points[:,0], image_points[:,1]
+        X, Y = det_i[:,0], det_i[:,1]
         U, V = undistortion[:,0], undistortion[:,1]
         plt.quiver(X, Y, U, -V, units='dots')
         # plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1) # plot exact
+        plt.text( 0.5, 0, 'max observed distortion: %.2f px' % max_distortion, color='#CF4457', fontsize=10,
+            horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
         plt.gca().invert_yaxis()
         plt.axis('equal')
 
@@ -301,8 +293,6 @@ def process(filename):
         plt.quiver(X, Y, U, -V, units='dots')
         #plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1)) # plot exact
         plt.gca().invert_yaxis()
-        plt.text( 0.5, 0.5, 'max distortion: %.2f' % max_distortion, color='#CF4457', fontsize=8,
-            horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
         plt.axis('equal')        
 
         plt.tight_layout()
@@ -312,7 +302,7 @@ def process(filename):
 
 def main():
     from glob import iglob
-    for filename in iglob('/var/tmp/capture/50.png'):
+    for filename in iglob('/var/tmp/capture/70.png'):
         process(filename)
 
 if __name__ == '__main__':

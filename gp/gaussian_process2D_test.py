@@ -10,7 +10,7 @@ if __name__ == "__main__":
     t = np.array([r[0]**2+r[1]**2 + r[0]*r[1] + 0.1*np.random.randn() for r in x])
     t = t - np.mean(t)
        
-    # Find the best set of hyper-parameters        
+    # Find the best set of hyper-parameters
     theta0 = [np.std(t), 1, 1, 0, 10]
     gp = GaussianProcess.fit(x, t, sqexp2D_covariancef, theta0)
     print gp.covf.theta
