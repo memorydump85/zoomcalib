@@ -12,65 +12,66 @@ class GaussianProcess(object):
 #--------------------------------------
     
     def __init__(self, train_x, train_t, covf):
-        self.train_x = train_x
-        self.train_t = train_t
-        self.covf = covf
-        self.C = None
-        self.Cinvt = None
+        self._train_x = train_x
+        self._train_t = train_t
+        self._covf = covf
+        self._C = None
+        self._Cinvt = None
+        self.fit_result = None
 
         
     def ensure_gram_matrix(self):
-        if self.C is not None:
+        if self._C is not None:
             return
         
-        self.C = self.covf.compute_gram_matrix(self.train_x)
-        self.Cinvt = solve(self.C, self.train_t)
+        self._C = self._covf.compute_gram_matrix(self._train_x)
+        self._Cinvt = solve(self._C, self._train_t)
 
 
     def predict(self, query, cov=False):
-        return self.predict_(query) if cov else self.predict_mean_(query)
+        return self.__predict(query) if cov else self.__predict_mean(query)
     
     
-    def predict_mean_(self, query):
-        N = len(self.train_x)
+    def __predict_mean(self, query):
+        N = len(self._train_x)
         M = len(query)
         
-        data = np.concatenate((self.train_x, query))
+        data = np.concatenate((self._train_x, query))
 
         # TODO: compute only relevant parts of A
-        A = self.covf.compute_gram_matrix(data)
+        A = self._covf.compute_gram_matrix(data)
         Kt = A[N:,:N]
         
         self.ensure_gram_matrix()
-        q_mean = Kt.dot(self.Cinvt) 
+        q_mean = Kt.dot(self._Cinvt) 
         
         return q_mean
 
     
-    def predict_(self, query):
-        N = len(self.train_x)
+    def __predict(self, query):
+        N = len(self._train_x)
         M = len(query)
         
-        data = np.concatenate((self.train_x, query))
+        data = np.concatenate((self._train_x, query))
 
         # TODO: compute only relevant parts of A
-        A = self.covf.compute_gram_matrix(data)
+        A = self._covf.compute_gram_matrix(data)
         Kt = A[N:,:N]
         Cq = A[N:,N:]
            
         self.ensure_gram_matrix()
-        q_mean = Kt.dot(self.Cinvt)
-        q_covf = Cq - Kt.dot(solve(self.C, Kt.T))
+        q_mean = Kt.dot(self._Cinvt)
+        q_covf = Cq - Kt.dot(solve(self._C, Kt.T))
         
         return (q_mean, q_covf)
     
     
     def model_evidence(self):
         self.ensure_gram_matrix()
-        t = self.train_t
+        t = self._train_t
 
-        datafit = t.T.dot(self.Cinvt)
-        s, logdet = slogdet(self.C)
+        datafit = t.T.dot(self._Cinvt)
+        s, logdet = slogdet(self._C)
         complexity = s*logdet
         nomalization = len(t)*np.log(np.pi*2)
         
@@ -81,11 +82,20 @@ class GaussianProcess(object):
     def fit(cls, x, t, covf, theta0):
         evidence = lambda theta: \
             -cls(x, t, covf(theta)).model_evidence()
-        theta_opt = optimize.fmin_powell(func=evidence, x0=theta0, xtol=0.001, ftol=0.001, disp=False)
         
-        if isinstance(theta_opt.tolist(), float):
-            theta_opt = [theta_opt.tolist()]
-        return cls(x, t, covf(theta_opt))
+        if False:
+            options = { 'xtol': 0.0001, 'ftol': 0.0001 }
+            fit_result = optimize.minimize(evidence, x0=theta0, method='Powell', options=options)
+            fit_result.x0 = theta0
+        else:
+            options = { 'gtol': 1e-05, 'norm': 2 }
+            fit_result = optimize.minimize(evidence, x0=theta0, method='CG', options=options)
+            fit_result.x0 = theta0
+        
+        theta_opt = fit_result.x
+        new_gp = cls(x, t, covf(theta_opt))
+        new_gp.fit_result = fit_result
+        return new_gp
 
 
 #--------------------------------------
