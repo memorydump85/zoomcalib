@@ -115,7 +115,6 @@ def process(filename):
     im = rgb2gray(im)
     im = (im * 255.).astype(np.uint8)
     
-    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
 
     tag_mosaic = TagMosaic(0.0254)
     detections = AprilTagDetector().detect(im)
@@ -183,6 +182,7 @@ def process(filename):
     # Finally, find the local homography `LH0` from world to image at `c_w`
     #
     H_iw = learn_homography_i2w()
+    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
     c_w = H_iw.map(c_i)[:2]
     H_wi = learn_homography_w2i()
     LH0 = H_wi.get_homography_at(c_w)
