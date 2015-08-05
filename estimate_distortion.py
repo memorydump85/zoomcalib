@@ -60,6 +60,45 @@ def local_homography_cv_error(theta, args):
     return np.mean(errs)
 
 
+#--------------------------------------
+class GPModel(object):
+#--------------------------------------
+    def __init__(self, points_i, values):
+        assert len(points_i) == len(values)
+
+        X = points_i
+        S = np.cov(X.T)
+                
+        meanV = np.mean(values, axis=0)
+        V = values - np.tile(meanV, (len(values), 1))
+
+        self._meanV = meanV
+        self._gp_x = GPModel._fit_gp(X, S, V[:,0])
+        self._gp_y = GPModel._fit_gp(X, S, V[:,1])
+
+    @staticmethod
+    def _fit_gp(X, covX, t):
+        xx, xy, yy = covX[0,0], covX[0,1], covX[1,1]
+
+        # Perform hyper-parameter optimization with different
+        # initial points and choose the GP with best model evidence
+        theta0 = np.array(( t.std(), sqrt(xx), sqrt(yy), xy, 10. ))
+        best_gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)
+
+        for tau in xrange(50, 800, 100):
+            theta0 = np.array(( t.std(), tau, tau, 0, 10. ))
+            gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)                
+            if gp.model_evidence() > best_gp.model_evidence():
+                best_gp = gp
+
+        return best_gp
+
+
+    def predict(self, X):
+        V = np.vstack([ self._gp_x.predict(X), self._gp_y.predict(X) ]).T
+        return V + np.tile(self._meanV, (len(X), 1))
+
+
 def process(filename):
     #
     # Conventions:
@@ -170,34 +209,10 @@ def process(filename):
     max_distortion = np.max([np.linalg.norm(u) for u in undistortion])
     print '\nMaximum distortion is %.2f pixels' % max_distortion
     
-
-    #--------------------------------------
-    class GPModel(object):
-    #--------------------------------------
-        def __init__(self, points_i, values):
-            assert len(points_i) == len(values)
-
-            X = points_i
-            S = np.cov(X.T)
-                    
-            meanV = np.mean(values, axis=0)
-            V = values - np.tile(meanV, (len(values), 1))
-
-            theta0 = np.array(( V[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
-            gp_x = GaussianProcess.fit(X, V[:,0], sqexp2D_covariancef, theta0)
-
-            theta0 = np.array(( V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
-            gp_y = GaussianProcess.fit(X, V[:,1], sqexp2D_covariancef, theta0)
-
-            self._meanV = meanV
-            self._gp_x = gp_x
-            self._gp_y = gp_y
-
-        def predict(self, X):
-            V = np.vstack([ self._gp_x.predict(X), self._gp_y.predict(X) ]).T
-            return V + np.tile(self._meanV, (len(X), 1))
-
     
+    #
+    # Fit non-parametric model to the observations
+    #
     model = GPModel(det_i, undistortion)
     
     print '\nGP Hyper-parameters'
@@ -214,12 +229,15 @@ def process(filename):
     print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
 
 
-    #   Visualization
+    #
+    # Visualization
+    #
     if True:
         from skimage.filters import scharr
         from matplotlib import pyplot as plt
 
         plt.style.use('ggplot')
+        plt.figure(figsize=(16,10))
 
         #__1__
         plt.subplot(221)
@@ -297,12 +315,12 @@ def process(filename):
 
         plt.tight_layout()
         plt.gcf().patch.set_facecolor('#dddddd')
-        plt.show()
+        plt.savefig(filename + '.svg', bbox_inches='tight')
 
 
 def main():
     from glob import iglob
-    for filename in iglob('/var/tmp/capture/70.png'):
+    for filename in iglob('/var/tmp/capture/50.png'):
         process(filename)
 
 if __name__ == '__main__':
