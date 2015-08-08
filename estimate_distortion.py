@@ -76,6 +76,7 @@ class GPModel(object):
         self._gp_x = GPModel._fit_gp(X, S, V[:,0])
         self._gp_y = GPModel._fit_gp(X, S, V[:,1])
 
+
     @staticmethod
     def _fit_gp(X, covX, t):
         xx, xy, yy = covX[0,0], covX[0,1], covX[1,1]
@@ -209,7 +210,6 @@ def process(filename):
     max_distortion = np.max([np.linalg.norm(u) for u in undistortion])
     print '\nMaximum distortion is %.2f pixels' % max_distortion
     
-    
     #
     # Fit non-parametric model to the observations
     #
@@ -227,7 +227,6 @@ def process(filename):
     print '  ' + str(model._gp_x.fit_result).replace('\n', '\n      ')
     print '  [ y ]'
     print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
-
 
     #
     # Visualization

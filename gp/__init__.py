@@ -43,9 +43,9 @@ class GaussianProcess(object):
         Kt = A[N:,:N]
         
         self.ensure_gram_matrix()
-        q_mean = Kt.dot(self._Cinvt) 
+        y_mean = Kt.dot(self._Cinvt) 
         
-        return q_mean
+        return y_mean
 
     
     def __predict(self, query):
@@ -60,10 +60,10 @@ class GaussianProcess(object):
         Cq = A[N:,N:]
            
         self.ensure_gram_matrix()
-        q_mean = Kt.dot(self._Cinvt)
-        q_covf = Cq - Kt.dot(solve(self._C, Kt.T))
+        y_mean = Kt.dot(self._Cinvt)
+        y_cov  = Cq - Kt.dot(solve(self._C, Kt.T))
         
-        return (q_mean, q_covf)
+        return (y_mean, y_cov)
     
     
     def model_evidence(self):
