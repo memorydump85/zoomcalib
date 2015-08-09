@@ -82,7 +82,7 @@ class Homography(object):
         # corresponding to the smallest eigen-value
         H = V.T[:,-1].reshape((3,3))
         self._H = reduce(np.dot, [self._tgtXinv, H, self._srcX])
-        
+
         self._precompute_done = True
 
 
@@ -138,7 +138,7 @@ class WeightedLocalHomography(object):
         self._precompute()
 
         A = self.constraint_matrix
-        
+
         # The weighting is a diagonal matrix that encodes how similar
         # `src_pt` is to each source point in `self._corrs`
         w_diag = [ self._weighting_func(src_pt, c.source) for c in self._corrs ]

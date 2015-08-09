@@ -3,7 +3,7 @@ from __future__ import division
 
 #--------------------------------------
 class TagMosaic(object):
-#--------------------------------------	
+#--------------------------------------
 	"""
 	The tag mosaic for the 36h11 family consists of 587 tags
 	laid out in 25 rows and 24 columns.

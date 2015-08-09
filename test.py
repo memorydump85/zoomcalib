@@ -12,7 +12,7 @@ from tag36h11_mosaic import TagMosaic
 def main():
 
     im = imread('/var/tmp/datasets/tamron-2.2/im000.png')
-    im = rgb2gray(im)    
+    im = rgb2gray(im)
     im = img_as_ubyte(im)
 
     tag_mosaic = TagMosaic(0.0254)
