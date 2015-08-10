@@ -148,7 +148,7 @@ cdef image_u8_t *image_u8_create_from_ndarray(np.ndarray[np.uint8_t, ndim=2, mod
     for y in xrange(im.height):
         for x in xrange(im.width):
             im.buf[im.stride*y+x] = arr[y,x]
-    
+
     return im
 
 
@@ -176,7 +176,7 @@ class AprilTagDetector(object):
 
         tf_.black_border = border_size
         self.tf = PyCObject_FromVoidPtr(tf_, NULL)
-        
+
         cdef apriltag_detector_t *td_
         td_ = apriltag_detector_create()
         td_.quad_decimate = decimate
@@ -218,11 +218,11 @@ class AprilTagDetector(object):
         cdef zarray_t *c_detections
         c_detections = apriltag_detector_detect(td_, im_u8)
         image_u8_destroy(im_u8)
-        
+
         cdef apriltag_detection_t *det
         py_detections = []
         for i in xrange(zarray_size(c_detections)):
-            zarray_get(c_detections, i, cython.address(det))          
+            zarray_get(c_detections, i, cython.address(det))
             py_detections.append(create_AprilTagDetection_from_struct(det))
 
         apriltag_detections_destroy(c_detections)

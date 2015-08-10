@@ -38,7 +38,7 @@ cpdef gram_matrix_sq_exp_1D(
             if i==j: v += noise_variance
 
             K[i,j] = K[j,i] = v
-            
+
     return K
 
 
@@ -86,6 +86,5 @@ cpdef gram_matrix_sq_exp_2D(
             if i==j: v += noise_variance
 
             K[i,j] = K[j,i] = v
-            
 
     return K

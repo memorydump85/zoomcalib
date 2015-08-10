@@ -15,13 +15,13 @@ class sqexp2D_covariancef(object):
         self.fsig, sig00, sig11, var10, self.noise_prec = theta
         Sigma = np.array([[sig00**2, var10], [var10, sig11**2]])
         self.Sigma_inv = np.linalg.inv(Sigma).flatten()
-    
+
     def __call__(self, a, b, colocated):
         # chi2 = zT * Sigma_inv * z
         g, h = a - b
         p, q, r, s = self.Sigma_inv
         chi2 = g*(p*g+q*h) + h*(r*g+s*h)
-    
+
         nu = self.fsig
         beta = self.noise_prec
 
@@ -49,11 +49,11 @@ class sqexp1D_covariancef(object):
     def __init__(self, theta):
         self.theta = theta
         self.fsig, self.sig, self.noise_prec = theta
-    
-    def __call__(self, a, b, colocated):    
+
+    def __call__(self, a, b, colocated):
         z = a - b
         v = (self.fsig*self.fsig)* np.exp(-0.5*(z*z)/(self.sig*self.sig))
-        return v + 1./(self.noise_prec*self.noise_prec) if colocated else v 
+        return v + 1./(self.noise_prec*self.noise_prec) if colocated else v
 
 
 def py_gram_matrix_sq_exp_1D(data,

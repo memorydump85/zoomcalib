@@ -27,7 +27,7 @@ def create_local_homography_object(bandwidth, magnitude, lambda_):
 
 
 def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
-    """ 
+    """
     This is the objective function used for optimizing parameters of
     the `SqExpWeightingFunction` usef for local homography fitting
 
@@ -60,6 +60,46 @@ def local_homography_cv_error(theta, args):
     return np.mean(errs)
 
 
+#--------------------------------------
+class GPModel(object):
+#--------------------------------------
+    def __init__(self, points_i, values):
+        assert len(points_i) == len(values)
+
+        X = points_i
+        S = np.cov(X.T)
+
+        meanV = np.mean(values, axis=0)
+        V = values - np.tile(meanV, (len(values), 1))
+
+        self._meanV = meanV
+        self._gp_x = GPModel._fit_gp(X, S, V[:,0])
+        self._gp_y = GPModel._fit_gp(X, S, V[:,1])
+
+
+    @staticmethod
+    def _fit_gp(X, covX, t):
+        xx, xy, yy = covX[0,0], covX[0,1], covX[1,1]
+
+        # Perform hyper-parameter optimization with different
+        # initial points and choose the GP with best model evidence
+        theta0 = np.array(( t.std(), sqrt(xx), sqrt(yy), xy, 10. ))
+        best_gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)
+
+        for tau in xrange(50, 800, 100):
+            theta0 = np.array(( t.std(), tau, tau, 0, 10. ))
+            gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)
+            if gp.model_evidence() > best_gp.model_evidence():
+                best_gp = gp
+
+        return best_gp
+
+
+    def predict(self, X):
+        V = np.vstack([ self._gp_x.predict(X), self._gp_y.predict(X) ]).T
+        return V + np.tile(self._meanV, (len(X), 1))
+
+
 def process(filename):
     #
     # Conventions:
@@ -75,8 +115,7 @@ def process(filename):
     im = imread(filename)
     im = rgb2gray(im)
     im = (im * 255.).astype(np.uint8)
-    
-    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
+
 
     tag_mosaic = TagMosaic(0.0254)
     detections = AprilTagDetector().detect(im)
@@ -85,7 +124,7 @@ def process(filename):
     mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
 
     det_i = np.array([ d.c for d in detections ])
-    det_w = np.array([ mosaic_pos(d) for d in detections ])    
+    det_w = np.array([ mosaic_pos(d) for d in detections ])
 
     #
     # To learn a weighted local homography, we find the weighting
@@ -98,7 +137,7 @@ def process(filename):
                     args=[ det_i, det_w ],
                     method='Powell',
                     options={'ftol': 1e-3} )
-        
+
         print '\nHomography: i->w'
         print '------------------'
         print '  params:', result.x
@@ -118,14 +157,14 @@ def process(filename):
                     method='Powell',
                     args=[ det_w, det_i ],
                     options={'ftol': 1e-3} )
-        
+
         print '\nHomography: w->i'
         print '------------------'
         print '  params:', result.x
         print '   error: %.6f' % result.fun
         print '\n  Optimization detail:'
         print '  ' + str(result).replace('\n', '\n      ')
-        
+
         H = create_local_homography_object(*result.x)
         for w, i in zip(det_w, det_i):
             H.add_correspondence(w, i)
@@ -144,6 +183,7 @@ def process(filename):
     # Finally, find the local homography `LH0` from world to image at `c_w`
     #
     H_iw = learn_homography_i2w()
+    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
     c_w = H_iw.map(c_i)[:2]
     H_wi = learn_homography_w2i()
     LH0 = H_wi.get_homography_at(c_w)
@@ -169,37 +209,12 @@ def process(filename):
     undistortion = mapped_i - det_i # image + undistortion = mapped
     max_distortion = np.max([np.linalg.norm(u) for u in undistortion])
     print '\nMaximum distortion is %.2f pixels' % max_distortion
-    
 
-    #--------------------------------------
-    class GPModel(object):
-    #--------------------------------------
-        def __init__(self, points_i, values):
-            assert len(points_i) == len(values)
-
-            X = points_i
-            S = np.cov(X.T)
-                    
-            meanV = np.mean(values, axis=0)
-            V = values - np.tile(meanV, (len(values), 1))
-
-            theta0 = np.array(( V[:,0].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
-            gp_x = GaussianProcess.fit(X, V[:,0], sqexp2D_covariancef, theta0)
-
-            theta0 = np.array(( V[:,1].std(), sqrt(S[0,0]), sqrt(S[1,1]), S[1,0], 10. ))
-            gp_y = GaussianProcess.fit(X, V[:,1], sqexp2D_covariancef, theta0)
-
-            self._meanV = meanV
-            self._gp_x = gp_x
-            self._gp_y = gp_y
-
-        def predict(self, X):
-            V = np.vstack([ self._gp_x.predict(X), self._gp_y.predict(X) ]).T
-            return V + np.tile(self._meanV, (len(X), 1))
-
-    
+    #
+    # Fit non-parametric model to the observations
+    #
     model = GPModel(det_i, undistortion)
-    
+
     print '\nGP Hyper-parameters'
     print '---------------------'
     print '  x: ', model._gp_x._covf.theta
@@ -213,96 +228,97 @@ def process(filename):
     print '  [ y ]'
     print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
 
+    #
+    # Visualization
+    #
+    from skimage.filters import scharr
+    from matplotlib import pyplot as plt
 
-    #   Visualization
-    if True:
-        from skimage.filters import scharr
-        from matplotlib import pyplot as plt
+    plt.style.use('ggplot')
+    plt.figure(figsize=(16,10))
 
-        plt.style.use('ggplot')
+    #__1__
+    plt.subplot(221)
+    plt.title(filename.split('/')[-1])
+    plt.imshow(im, cmap='gray')
+    plt.plot(det_i[:,0], det_i[:,1], 'o')
+    # for i, d in enumerate(detections):
+    #     plt.text(d.c[0], d.c[1], str(d.id),
+    #         fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
+    plt.grid()
+    plt.axis('equal')
 
-        #__1__
-        plt.subplot(221)
-        plt.title(filename.split('/')[-1])
-        plt.imshow(im, cmap='gray')
-        plt.plot(det_i[:,0], det_i[:,1], 'o')
-        # for i, d in enumerate(detections):
-        #     plt.text(d.c[0], d.c[1], str(d.id),
-        #         fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
+    #__2__
+    plt.subplot(222)
+    plt.title('Non-linear Homography')
+
+    if False:
+        plt.imshow(1.-scharr(im), cmap='bone', interpolation='gaussian')
+
+        from collections import defaultdict
+        row_groups = defaultdict(list)
+        col_groups = defaultdict(list)
+
+        for d in detections:
+            row, col = tag_mosaic.get_row(d.id), tag_mosaic.get_col(d.id)
+            row_groups[row] += [ d.id ]
+            col_groups[col] += [ d.id ]
+
+        for k, v in row_groups.iteritems():
+            a = tag_mosaic.get_position_meters(np.min(v))
+            b = tag_mosaic.get_position_meters(np.max(v))
+            x_coords = np.linspace(a[0], b[0], 100)
+            points = np.array([ H_wi.map([x, a[1]]) for x in x_coords ])
+            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+
+        for k, v in col_groups.iteritems():
+            a = tag_mosaic.get_position_meters(np.min(v))
+            b = tag_mosaic.get_position_meters(np.max(v))
+            y_coords = np.linspace(a[1], b[1], 100)
+            points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
+            plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
+
+        plt.plot(det_i[:,0], det_i[:,1], 'kx')
         plt.grid()
         plt.axis('equal')
 
-        #__2__
-        plt.subplot(222)
-        plt.title('Non-linear Homography')
+    #__3__
+    plt.subplot(223)
+    plt.title('Qualitative Estimates')
 
-        if False:
-            plt.imshow(1.-scharr(im), cmap='bone', interpolation='gaussian')
+    for i, d in enumerate(detections):
+        plt.text(d.c[0], d.c[1], str(i), fontsize=8, color='#999999')
 
-            from collections import defaultdict
-            row_groups = defaultdict(list)
-            col_groups = defaultdict(list)
+    X, Y = det_i[:,0], det_i[:,1]
+    U, V = undistortion[:,0], undistortion[:,1]
+    plt.quiver(X, Y, U, -V, units='dots')
+    # plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1) # plot exact
+    plt.text( 0.5, 0, 'max observed distortion: %.2f px' % max_distortion, color='#CF4457', fontsize=10,
+        horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
+    plt.gca().invert_yaxis()
+    plt.axis('equal')
 
-            for d in detections:
-                row, col = tag_mosaic.get_row(d.id), tag_mosaic.get_col(d.id)
-                row_groups[row] += [ d.id ]
-                col_groups[col] += [ d.id ]
+    #__4__
+    plt.subplot(224)
+    plt.title('Qualitative Undistortion')
+    H, W = im.shape
+    grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
+    predicted = model.predict(grid)
+    X, Y = grid[:,0], grid[:,1]
+    U, V = predicted[:,0], predicted[:,1]
+    plt.quiver(X, Y, U, -V, units='dots')
+    #plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1)) # plot exact
+    plt.gca().invert_yaxis()
+    plt.axis('equal')
 
-            for k, v in row_groups.iteritems():
-                a = tag_mosaic.get_position_meters(np.min(v))
-                b = tag_mosaic.get_position_meters(np.max(v))
-                x_coords = np.linspace(a[0], b[0], 100)
-                points = np.array([ H_wi.map([x, a[1]]) for x in x_coords ])
-                plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
-
-            for k, v in col_groups.iteritems():
-                a = tag_mosaic.get_position_meters(np.min(v))
-                b = tag_mosaic.get_position_meters(np.max(v))
-                y_coords = np.linspace(a[1], b[1], 100)
-                points = np.array([ H_wi.map([a[0], y]) for y in y_coords ])
-                plt.plot(points[:,0], points[:,1], '-',color='#CF4457', linewidth=2)
-            
-            plt.plot(det_i[:,0], det_i[:,1], 'kx')
-            plt.grid()
-            plt.axis('equal')
-
-        #__3__
-        plt.subplot(223)
-        plt.title('Qualitative Estimates')
-
-        for i, d in enumerate(detections):
-            plt.text(d.c[0], d.c[1], str(i), fontsize=8, color='#999999')
-
-        X, Y = det_i[:,0], det_i[:,1]
-        U, V = undistortion[:,0], undistortion[:,1]
-        plt.quiver(X, Y, U, -V, units='dots')
-        # plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1) # plot exact
-        plt.text( 0.5, 0, 'max observed distortion: %.2f px' % max_distortion, color='#CF4457', fontsize=10,
-            horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
-        plt.gca().invert_yaxis()
-        plt.axis('equal')
-
-        #__4__
-        plt.subplot(224)
-        plt.title('Qualitative Undistortion')
-        H, W = im.shape
-        grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
-        predicted = model.predict(grid)
-        X, Y = grid[:,0], grid[:,1]
-        U, V = predicted[:,0], predicted[:,1]
-        plt.quiver(X, Y, U, -V, units='dots')
-        #plt.quiver(X, Y, U, -V, angles='xy', scale_units='xy', scale=1)) # plot exact
-        plt.gca().invert_yaxis()
-        plt.axis('equal')        
-
-        plt.tight_layout()
-        plt.gcf().patch.set_facecolor('#dddddd')
-        plt.show()
+    plt.tight_layout()
+    plt.gcf().patch.set_facecolor('#dddddd')
+    plt.savefig(filename + '.svg', bbox_inches='tight')
 
 
 def main():
     from glob import iglob
-    for filename in iglob('/var/tmp/capture/70.png'):
+    for filename in iglob('/var/tmp/capture/50.png'):
         process(filename)
 
 if __name__ == '__main__':

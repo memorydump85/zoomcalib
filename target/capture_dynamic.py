@@ -66,7 +66,7 @@ def get_camera_image(token):
         os.mkdir('/var/tmp/capture')
 
     shutil.copyfile('/tmp/cap.jpeg', '/var/tmp/capture/%s_%s.jpeg' % (focal_length, token))
-    
+
     global image_aquired_event
     image_aquired_event.set()
 
@@ -89,18 +89,18 @@ class AnimateThread(threading.Thread):
                       ('"0.75in"', '"0.75in"'),
                       ('"0.75in"', '"0.25in"'),
                       ('"0.50in"', '"0.50in"') ]
-        
+
         for i, (top, left) in enumerate(positions):
             svg_moved_event.clear()
             GObject.idle_add(webview_svg_set_pos, top, left)
             svg_moved_event.wait()
 
             time.sleep(0.2)
-            
+
             image_aquired_event.clear()
             GObject.idle_add(get_camera_image, chr(65+i))
             image_aquired_event.wait()
-      
+
         GObject.idle_add(Gtk.main_quit)
 
 
