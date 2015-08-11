@@ -1,6 +1,6 @@
 import numpy as np
-from sys import stdout
 from numpy import sqrt
+from numpy.linalg.linalg import LinAlgError
 from skimage.io import imread
 from skimage.color import rgb2gray
 from scipy.optimize import minimize
@@ -13,13 +13,6 @@ from gp import GaussianProcess, sqexp2D_covariancef
 
 
 np.set_printoptions(precision=4, suppress=True)
-
-
-#--------------------------------------
-class sqexp2D_covariancef_Beta10(sqexp2D_covariancef):
-#--------------------------------------
-    def __init__(self, theta):
-        super(sqexp2D_covariancef_Beta10, self).__init__(list(theta) + [20.])
 
 
 #--------------------------------------
@@ -44,16 +37,20 @@ class WorldImageNonLinearMapping(object):
 
         # Perform hyper-parameter optimization with different
         # initial points and choose the GP with best model evidence
-        theta0 = np.array(( t.std(), sqrt(xx), sqrt(yy), xy ))
-        best_gp = GaussianProcess.fit(X, t, sqexp2D_covariancef_Beta10, theta0)
-        stdout.write('%.4f \r' % best_gp.model_evidence())
+        theta0 = ( t.std(), sqrt(xx), sqrt(yy), xy, 10. )
+        best_gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)
+        print '          : %.4f' % best_gp.model_evidence()
 
-        for tau in np.linspace(0, 3, 200) + 0.1:
-            theta0 = np.array(( t.std(), tau, tau, 0 ))
-            gp = GaussianProcess.fit(X, t, sqexp2D_covariancef_Beta10, theta0)
-            if gp.model_evidence() > best_gp.model_evidence():
-                best_gp = gp
-                stdout.write('%.4f: %.4f \r' % (tau, best_gp.model_evidence()))
+        for tau in np.linspace(0, 3, 50) + 0.1:
+            try:
+                theta0 = ( t.std(), tau, tau, 0, 10. )
+                gp = GaussianProcess.fit(X, t, sqexp2D_covariancef, theta0)
+                if gp.model_evidence() > best_gp.model_evidence():
+                    best_gp = gp
+                    print '    %.4f: %.4f' % (tau, best_gp.model_evidence())
+            except LinAlgError as err:
+                print '    %.4f: %s' % (tau, str(err))
+
 
         return best_gp
 
