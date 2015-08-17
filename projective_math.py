@@ -95,9 +95,9 @@ class WeightedLocalHomography(object):
         w_diag = np.sqrt(np.repeat(w_diag, 2))
         assert A.shape[0] == w_diag.shape[0]
 
-        lambda2I = (self.regularization_lambda*self.regularization_lambda) * np.eye(A.shape[0])
+        L = (self.regularization_lambda*self.regularization_lambda) * np.eye(A.shape[0])
         W = np.diag(w_diag)
-        U, s, V = np.linalg.svd((W + lambda2I).dot(A))
+        U, s, V = np.linalg.svd((W + L).dot(A))
 
         # Homography is the total least squares solution: The eigen-vector
         # corresponding to the smallest eigen-value
@@ -132,6 +132,7 @@ def estimate_intrinsics(homographies):
     be equal to zero.
     """
     assert len(homographies) > 0
+    assert homographies[0].shape == (3,3)
 
     if len(homographies) == 1:
         raise Exception('Need atleast 2 homographies to estimate intrinsics.\n' +
@@ -175,11 +176,12 @@ def estimate_intrinsics(homographies):
 def estimate_intrinsics_assume_cxy_noskew(homographies, cxy):
     """
     Similar to `estimate_intrinsics`, but assumes that the camera
-    center `cxy` in known, and the skew of the camera gamma is zero.
+    center `cxy` is known, and the skew of the camera `gamma` is zero.
     These assumptions allow this method to estimate camera intrinsics
     from just one input homography.
     """
     assert len(homographies) > 0
+    assert homographies[0].shape == (3,3)
 
     u0, v0 = cxy
 
