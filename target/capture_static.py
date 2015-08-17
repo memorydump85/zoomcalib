@@ -1,6 +1,6 @@
 import sys
 import os, os.path, shutil
-from subprocess import check_call, check_output, STDOUT
+from subprocess import Popen, check_call, check_output, STDOUT
 from PIL.ExifTags import TAGS
 from cStringIO import StringIO
 
@@ -31,8 +31,11 @@ def get_camera_image():
     if not os.path.exists('/var/tmp/capture'):
         os.mkdir('/var/tmp/capture')
 
-    shutil.copyfile('/tmp/cap.jpeg', '/var/tmp/capture/%s.jpg' % focal_length)
-    
+    print '  Converting image to .png'
+    filename = '/var/tmp/capture/%03d' % focal_length
+    shutil.copyfile('/tmp/cap.jpeg', filename + '.jpeg')
+    Popen(['convert', filename + '.jpeg', filename + '.png'])
+
 while True:
 	get_camera_image()
 	raw_input("Press Enter to continue...")

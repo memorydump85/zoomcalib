@@ -1,4 +1,5 @@
-from sys import stdout
+#! /usr/bin/python
+
 import numpy as np
 from math import sqrt
 from itertools import chain
@@ -57,9 +58,10 @@ def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
 
 def local_homography_cv_error(theta, args):
     src, tgt = args
-    errs = [ local_homography_error(theta, src[ixt], tgt[ixt], src[ixv], tgt[ixv])
-                for ixt, ixv in KFold(len(src), n_folds=10, shuffle=True) ]
-    return np.mean(errs)
+    return local_homography_error(theta, src[:9], tgt[:9], src[9:25], tgt[9:25])
+    # errs = [ local_homography_error(theta, src[ixt], tgt[ixt], src[ixv], tgt[ixv])
+    #             for ixt, ixv in KFold(len(src), n_folds=10, shuffle=True) ]
+    # return np.mean(errs)
 
 
 def matrix_to_xyzrph(M):
@@ -133,6 +135,14 @@ def process(filename):
     detections = AprilTagDetector().detect(im)
     print '  %d tags detected.' % len(detections)
 
+    #
+    # Sort detections by distance to center
+    #
+    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
+    dist = lambda p_i: np.linalg.norm(p_i - c_i)
+    closer_to_center = lambda d1, d2: int(dist(d1.c) - dist(d2.c))
+    detections.sort(cmp=closer_to_center)
+
     mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
 
     det_i = np.array([ d.c for d in detections ])
@@ -205,6 +215,7 @@ def process(filename):
     print '      c_w =', c_w
     print '      c_i =', c_i
     print 'LH0 * c_w =', H_wi.map(c_w)
+    print LH0
 
     K = estimate_intrinsics_assume_cxy_noskew([LH0], c_i)
     print '\nintrinsics:'
@@ -262,9 +273,9 @@ def process(filename):
     plt.title(filename.split('/')[-1])
     plt.imshow(im, cmap='gray')
     plt.plot(det_i[:,0], det_i[:,1], 'o')
-    # for i, d in enumerate(detections):
-    #     plt.text(d.c[0], d.c[1], str(d.id),
-    #         fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
+    for i, d in enumerate(detections):
+        plt.text(d.c[0], d.c[1], str(i),
+            fontsize=8, color='white', bbox=dict(facecolor='maroon', alpha=0.75))
     plt.grid()
     plt.axis('equal')
 
@@ -333,12 +344,19 @@ def process(filename):
 
     plt.tight_layout()
     plt.gcf().patch.set_facecolor('#dddddd')
+    #plt.show()
     plt.savefig(filename + '.svg', bbox_inches='tight')
 
 
 def main():
-    from glob import iglob
-    for filename in iglob('/var/tmp/capture/50.png'):
+    import sys
+
+    if len(sys.argv)==1:
+        imfiles = ["/var/tmp/capture/105.png"]
+    else:
+        imfiles = sys.argv[1:]
+
+    for filename in imfiles:
         process(filename)
 
 if __name__ == '__main__':
