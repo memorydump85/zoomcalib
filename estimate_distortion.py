@@ -9,7 +9,8 @@ from sklearn.cross_validation import KFold
 
 from apriltag import AprilTagDetector
 from projective_math import WeightedLocalHomography, SqExpWeightingFunction
-from projective_math import estimate_intrinsics_assume_cxy_noskew, get_extrinsics_from_homography
+from projective_math import estimate_intrinsics_assume_cxy_noskew
+from projective_math import get_extrinsics_from_homography
 from tag36h11_mosaic import TagMosaic
 from gp import GaussianProcess, sqexp2D_covariancef
 
@@ -30,7 +31,7 @@ def create_local_homography_object(bandwidth, magnitude, lambda_):
 def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
     """
     This is the objective function used for optimizing parameters of
-    the `SqExpWeightingFunction` usef for local homography fitting
+    the `SqExpWeightingFunction` used for local homography fitting
 
     Parameters:
     -----------
