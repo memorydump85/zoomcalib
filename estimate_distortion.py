@@ -10,6 +10,7 @@ from sklearn.cross_validation import KFold
 
 from apriltag import AprilTagDetector
 from projective_math import WeightedLocalHomography, SqExpWeightingFunction
+from projective_math import estimate_intrinsics_assume_cxy_noskew, get_extrinsics_from_homography
 from tag36h11_mosaic import TagMosaic
 from gp import GaussianProcess, sqexp2D_covariancef
 
@@ -60,6 +61,16 @@ def local_homography_cv_error(theta, args):
     # errs = [ local_homography_error(theta, src[ixt], tgt[ixt], src[ixv], tgt[ixv])
     #             for ixt, ixv in KFold(len(src), n_folds=10, shuffle=True) ]
     # return np.mean(errs)
+
+
+def matrix_to_xyzrph(M):
+    tx = M[0,3]
+    ty = M[1,3]
+    tz = M[2,3]
+    rx = np.arctan2(M[2,1], M[2,2])
+    ry = np.arctan2(-M[2,0], np.sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
+    rz = np.arctan2(M[1,0], M[0,0])
+    return np.array([tx, ty, tz, rx, ry, rz])
 
 
 #--------------------------------------
@@ -204,6 +215,14 @@ def process(filename):
     print '      c_i =', c_i
     print 'LH0 * c_w =', H_wi.map(c_w)
     print LH0
+
+    K = estimate_intrinsics_assume_cxy_noskew([LH0], c_i)
+    print '\nintrinsics:'
+    print K
+    E = get_extrinsics_from_homography(LH0, K)
+    print '\nextrinsics:'
+    print E
+    print '\nxyzrph:', matrix_to_xyzrph(E)
 
     #
     # Obtain distortion estimate
