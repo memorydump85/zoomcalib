@@ -29,7 +29,7 @@ def create_local_homography_object(bandwidth, magnitude, lambda_):
     return H
 
 
-def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
+def local_homography_error_impl(theta, t_src, t_tgt, v_src, v_tgt):
     """
     This is the objective function used for optimizing parameters of
     the `SqExpWeightingFunction` used for local homography fitting
@@ -53,15 +53,12 @@ def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
     sqerr = lambda a, b: np.linalg.norm(a-b)**2
     v_mapped = ( H.map(s)[:2] for s in v_src )
     mse = np.mean([ sqerr(m, t) for m, t in zip(v_mapped, v_tgt) ])
-    return sqrt(mse)
+    return mse
 
 
-def local_homography_cv_error(theta, args):
+def local_homography_error(theta, args):
     src, tgt = args
-    return local_homography_error(theta, src[:9], tgt[:9], src[9:25], tgt[9:25])
-    # errs = [ local_homography_error(theta, src[ixt], tgt[ixt], src[ixv], tgt[ixv])
-    #             for ixt, ixv in KFold(len(src), n_folds=10, shuffle=True) ]
-    # return np.mean(errs)
+    return local_homography_error_impl(theta, src[:9], tgt[:9], src[9:25], tgt[9:25])
 
 
 def matrix_to_xyzrph(M):
@@ -154,7 +151,7 @@ def process(filename):
     # validation folds of the data.
     #
     def learn_homography_i2w():
-        result = minimize( local_homography_cv_error,
+        result = minimize( local_homography_error,
                     x0=[ 50, 1, 1e-3 ],
                     args=[ det_i, det_w ],
                     method='Powell',
@@ -174,7 +171,7 @@ def process(filename):
         return H
 
     def learn_homography_w2i():
-        result = minimize( local_homography_cv_error,
+        result = minimize( local_homography_error,
                     x0=[ 0.0254, 1, 1e-3 ],
                     method='Powell',
                     args=[ det_w, det_i ],
@@ -352,7 +349,7 @@ def main():
     import sys
 
     if len(sys.argv)==1:
-        imfiles = ["/var/tmp/capture/105.png"]
+        imfiles = ["/var/tmp/capture/38.png"]
     else:
         imfiles = sys.argv[1:]
 

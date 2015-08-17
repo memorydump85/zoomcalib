@@ -21,7 +21,7 @@ class SqExpWeightingFunction(object):
         return self._nu*self._nu * np.exp(-(z*z).sum())
 
 
-def normalization_transform_(points):
+def _normalization_transform(points):
     muX, muY = np.mean(points, axis=0)
     stdX, stdY = np.std(points, axis=0)
     scaleX, scaleY = 1./stdX, 1./stdY
@@ -42,59 +42,6 @@ def normalization_transform_(points):
 def _homogeneous_coords(p):
     assert len(p)==2 or len(p)==3
     return p if len(p)==3 else np.array([p[0], p[1], 1.])
-
-
-#--------------------------------------
-class Homography(object):
-#--------------------------------------
-    def __init__(self):
-        self._corrs = []
-        self._precompute_done = False
-
-
-    def add_correspondence(self, source_xy, target_xy):
-        assert len(source_xy) == 2
-        assert len(target_xy) == 2
-        self._corrs.append(_Correspondence(source_xy, target_xy))
-
-
-    def _precompute(self):
-        """ precompute normalization transforms and constraint
-        matrix. These remain the same for every homography query """
-        if self._precompute_done == True:
-            return
-
-        self._srcX, _             = normalization_transform_([ c.source for c in self._corrs ])
-        self._tgtX, self._tgtXinv = normalization_transform_([ c.target for c in self._corrs ])
-
-        constraints = []
-        for c in self._corrs:
-            x, y, _ = self._srcX.dot(_homogeneous_coords(c.source))
-            i, j, _ = self._tgtX.dot(_homogeneous_coords(c.target))
-
-            constraints.append( [-x, -y, -1, 0, 0, 0, i*x, i*y, i] )
-            constraints.append( [0, 0, 0, -x, -y, -1, j*x, j*y, j] )
-
-        A = np.array(constraints, dtype=np.float)
-        U, s, V = np.linalg.svd(A)
-
-        # Homography is the total least squares solution: The eigen-vector
-        # corresponding to the smallest eigen-value
-        H = V.T[:,-1].reshape((3,3))
-        self._H = reduce(np.dot, [self._tgtXinv, H, self._srcX])
-
-        self._precompute_done = True
-
-
-    def get_homography(self):
-        self._precompute()
-        return self._H
-
-
-    def map(self, src_pt):
-        m = self.get_homography().dot(_homogeneous_coords(src_pt))
-        m /= m[2]
-        return m
 
 
 #--------------------------------------
@@ -119,8 +66,8 @@ class WeightedLocalHomography(object):
         if self._precompute_done == True:
             return
 
-        self._srcX, _             = normalization_transform_([ c.source for c in self._corrs ])
-        self._tgtX, self._tgtXinv = normalization_transform_([ c.target for c in self._corrs ])
+        self._srcX, _             = _normalization_transform([ c.source for c in self._corrs ])
+        self._tgtX, self._tgtXinv = _normalization_transform([ c.target for c in self._corrs ])
 
         constraints = []
         for c in self._corrs:
