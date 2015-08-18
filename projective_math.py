@@ -92,11 +92,10 @@ class WeightedLocalHomography(object):
 
         # Each correspondence produces 2 constraints. So weights also
         # need to be repeated
-        w_diag = np.sqrt(np.repeat(w_diag, 2))
-        assert A.shape[0] == w_diag.shape[0]
+        W = np.diag(np.sqrt(np.repeat(w_diag, 2)))
+        assert len(A) == len(W)
 
         L = (self.regularization_lambda*self.regularization_lambda) * np.eye(A.shape[0])
-        W = np.diag(w_diag)
         U, s, V = np.linalg.svd((W + L).dot(A))
 
         # Homography is the total least squares solution: The eigen-vector
@@ -112,130 +111,3 @@ class WeightedLocalHomography(object):
         m = self.get_homography_at(src_pt).dot(_homogeneous_coords(src_pt))
         m /= m[2]
         return m
-
-
-def estimate_intrinsics(homographies):
-    """
-    Estimate camera intrinsics `K` from a list of `homographies`. The
-    method uses constraints imposed by the image of the absolute conic,
-    as described in:
-        Z. Zhang, "A flexible new technique for camera calibration",
-        Section 3.1,
-        IEEE Transactions on Pattern Analysis and Machine Intelligence
-
-    If `homographies` contains only one homography, the center of the
-    camera `cxy` in pixel coordinates must be known and supplied as an
-    input parameter.
-
-    if 'homographies' contains less than 3 homographies, the skew (or
-    aspect ratio) of the estimated intrinsics matrix `K` is assumed to
-    be equal to zero.
-    """
-    assert len(homographies) > 0
-    assert homographies[0].shape == (3,3)
-
-    if len(homographies) == 1:
-        raise Exception('Need atleast 2 homographies to estimate intrinsics.\n' +
-            'Use `estimate_intrinsics_assume_cxy_noskew` if you need to estimate' +
-            'intrinsics from just one homography')
-
-    constraints = []
-    for H in homographies:
-
-        def c(i, j):
-            a0, a1, a2 = H[:,i]
-            b0, b1, b2 = H[:,j]
-            return np.array([
-                a0*b0, a0*b1 + a1*b0, a1*b1, a2*b0 + a0*b2, a2*b1 + a1*b2, a2*b2 ])
-
-        constraints.append(c(0,1))
-        constraints.append(c(0,0) - c(1,1))
-
-    if len(homographies) == 2: # skew = 0
-        constraints.append(np.array([0, 1, 0, 0, 0, 0]))
-
-    C = np.vstack(constraints)
-    U, s, V = np.linalg.svd(C)
-
-    # 1-based indices. Yuck! But code is consistent with the
-    # formulas in the paper.
-    b11, b12, b22, b13, b23, b33 = V.T[:,-1]
-
-    v0 = (b12*b13 - b11*b23) / (b11*b22 - b12*b12)
-    lambda_ = b33 - (b13*b13 + v0*(b12*b13 - b11*b23)) / b11
-    alpha = np.sqrt(lambda_ / b11)
-    beta = np.sqrt(lambda_*b11 / (b11*b22 - b12*b12))
-    gamma = -b12*alpha*alpha*beta / lambda_
-    u0 = gamma*v0 / beta - b13*alpha*alpha / lambda_
-
-    return np.array([[ alpha, gamma,   u0 ],
-                     [     0,  beta,   v0 ],
-                     [     0,     0,    1 ]])
-
-
-def estimate_intrinsics_assume_cxy_noskew(homographies, cxy):
-    """
-    Similar to `estimate_intrinsics`, but assumes that the camera
-    center `cxy` is known, and the skew of the camera `gamma` is zero.
-    These assumptions allow this method to estimate camera intrinsics
-    from just one input homography.
-    """
-    assert len(homographies) > 0
-    assert homographies[0].shape == (3,3)
-
-    u0, v0 = cxy
-
-    constraints = []
-    for H in homographies:
-        h00, h10, h20 = H[:,0]
-        h01, h11, h21 = H[:,1]
-
-        constraints.append([
-            h00*h01 - u0*h00*h21 - u0*h01*h20 + u0*u0*h20*h21,
-            h10*h11 - v0*h10*h21 - v0*h11*h20 + v0*v0*h20*h21,
-            h20*h21
-            ])
-        constraints.append([
-            h00*h00 - h01*h01 - 2*u0*h00*h20 + 2*u0*h01*h21 + u0*u0*h20*h20 - u0*u0*h21*h21,
-            h10*h10 - h11*h11 - 2*v0*h10*h20 + 2*v0*h11*h21 + v0*v0*h20*h20 - v0*v0*h21*h21,
-            h20*h20 - h21*h21
-            ])
-
-    C = np.vstack(constraints)
-    U, s, V = np.linalg.svd(C)
-    alpha, beta, _ = np.sqrt(1./V.T[:,-1])
-
-    return np.array([[ alpha,    0.,   u0 ],
-                     [     0,  beta,   v0 ],
-                     [     0,     0,    1 ]])
-
-
-def get_extrinsics_from_homography(H, intrinsics):
-    M = np.linalg.inv(intrinsics).dot(H)
-    M0 = M[:,0]
-    M1 = M[:,1]
-
-    # Columns should be unit vectors
-    M0_scale = np.linalg.norm(M0)
-    M1_scale = np.linalg.norm(M1)
-    scale = np.sqrt(M0_scale) * np.sqrt(M1_scale)
-
-    M /= scale
-    # Recover sign of scale factor by noting that observations
-    # must be in front of the camera, that is: z < 0
-    if M[1,2] > 0: M *= -1
-
-    # Assemble extrinsics matrix from the columns of M
-    E = np.eye(4)
-    E[:3,0] = M0
-    E[:3,1] = M1
-    E[:3,2] = np.cross(M0, M1)
-    E[:3,3] = M[:,2]
-
-    # Ensure that the rotation part of `E` is ortho-normal
-    # For this we use the polar decomposition to find the
-    # closest ortho-normal matrix to `E[:3,:3]`
-    U, s, Vt = np.linalg.svd(E[:3,:3])
-    E[:3,:3] = U.dot(Vt)
-
-    return E

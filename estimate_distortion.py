@@ -5,19 +5,15 @@ from math import sqrt
 from itertools import chain
 from skimage.io import imread
 from skimage.color import rgb2gray
-from scipy.optimize import minimize, minimize_scalar
-from sklearn.cross_validation import KFold
+from scipy.optimize import minimize
 
 from apriltag import AprilTagDetector
-from projective_math import WeightedLocalHomography, SqExpWeightingFunction
-from projective_math import estimate_intrinsics_assume_cxy_noskew
-from projective_math import get_extrinsics_from_homography
 from tag36h11_mosaic import TagMosaic
+from projective_math import WeightedLocalHomography, SqExpWeightingFunction
+from refine_homography import estimate_intrinsics_assume_cxy_noskew
+from refine_homography import get_extrinsics_from_homography
 from gp import GaussianProcess, sqexp2D_covariancef
 
-
-
-np.set_printoptions(precision=4, suppress=True)
 
 
 def create_local_homography_object(bandwidth, magnitude, lambda_):
@@ -50,10 +46,8 @@ def local_homography_error_impl(theta, t_src, t_tgt, v_src, v_tgt):
     for s, t in zip(t_src, t_tgt):
         H.add_correspondence(s, t)
 
-    sqerr = lambda a, b: np.linalg.norm(a-b)**2
-    v_mapped = ( H.map(s)[:2] for s in v_src )
-    mse = np.mean([ sqerr(m, t) for m, t in zip(v_mapped, v_tgt) ])
-    return mse
+    v_mapped = np.array([ H.map(s)[:2] for s in v_src ])
+    return ((v_mapped - v_tgt)**2).sum(axis=1).mean()
 
 
 def local_homography_error(theta, args):
@@ -66,7 +60,7 @@ def matrix_to_xyzrph(M):
     ty = M[1,3]
     tz = M[2,3]
     rx = np.arctan2(M[2,1], M[2,2])
-    ry = np.arctan2(-M[2,0], np.sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
+    ry = np.arctan2(-M[2,0], sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
     rz = np.arctan2(M[1,0], M[0,0])
     return np.array([tx, ty, tz, rx, ry, rz])
 
@@ -127,7 +121,6 @@ def process(filename):
     im = rgb2gray(im)
     im = (im * 255.).astype(np.uint8)
 
-
     tag_mosaic = TagMosaic(0.0254)
     detections = AprilTagDetector().detect(im)
     print '  %d tags detected.' % len(detections)
@@ -160,7 +153,7 @@ def process(filename):
         print '\nHomography: i->w'
         print '------------------'
         print '  params:', result.x
-        print '   error: %.6f' % result.fun
+        print '    rmse: %.6f' % sqrt(result.fun)
         print '\n  Optimization detail:'
         print '  ' + str(result).replace('\n', '\n      ')
 
@@ -180,7 +173,7 @@ def process(filename):
         print '\nHomography: w->i'
         print '------------------'
         print '  params:', result.x
-        print '   error: %.6f' % result.fun
+        print '    rmse: %.6f' % sqrt(result.fun)
         print '\n  Optimization detail:'
         print '  ' + str(result).replace('\n', '\n      ')
 
@@ -212,15 +205,6 @@ def process(filename):
     print '      c_w =', c_w
     print '      c_i =', c_i
     print 'LH0 * c_w =', H_wi.map(c_w)
-    print LH0
-
-    K = estimate_intrinsics_assume_cxy_noskew([LH0], c_i)
-    print '\nintrinsics:'
-    print K
-    E = get_extrinsics_from_homography(LH0, K)
-    print '\nextrinsics:'
-    print E
-    print '\nxyzrph:', matrix_to_xyzrph(E)
 
     #
     # Obtain distortion estimate
@@ -348,8 +332,10 @@ def process(filename):
 def main():
     import sys
 
+    np.set_printoptions(precision=4, suppress=True)
+
     if len(sys.argv)==1:
-        imfiles = ["/var/tmp/capture/38.png"]
+        imfiles = ["/var/tmp/capture/070.png"]
     else:
         imfiles = sys.argv[1:]
 
