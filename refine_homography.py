@@ -1,3 +1,4 @@
+from math import sqrt
 import numpy as np
 from scipy.optimize import root, minimize
 
@@ -24,9 +25,10 @@ def estimate_intrinsics(homographies):
     assert homographies[0].shape == (3,3)
 
     if len(homographies) == 1:
-        raise Exception('Need atleast 2 homographies to estimate intrinsics.\n' +
-            'Use `estimate_intrinsics_assume_cxy_noskew` if you need to estimate' +
-            'intrinsics from just one homography')
+        raise Exception(
+            'Need atleast 2 homographies to estimate intrinsics.\n' +
+            'Use `estimate_intrinsics_assume_cxy_noskew` if you need ' +
+            'to estimate intrinsics from just one homography')
 
     constraints = []
     for H in homographies:
@@ -35,7 +37,8 @@ def estimate_intrinsics(homographies):
             a0, a1, a2 = H[:,i]
             b0, b1, b2 = H[:,j]
             return np.array([
-                a0*b0, a0*b1 + a1*b0, a1*b1, a2*b0 + a0*b2, a2*b1 + a1*b2, a2*b2 ])
+                a0*b0, a0*b1 + a1*b0, a1*b1,
+                a2*b0 + a0*b2,a2*b1 + a1*b2, a2*b2 ])
 
         constraints.append(c(0,1))
         constraints.append(c(0,0) - c(1,1))
@@ -50,12 +53,12 @@ def estimate_intrinsics(homographies):
     # formulas in the paper.
     b11, b12, b22, b13, b23, b33 = V.T[:,-1]
 
-    v0 = (b12*b13 - b11*b23) / (b11*b22 - b12*b12)
-    lambda_ = b33 - (b13*b13 + v0*(b12*b13 - b11*b23)) / b11
-    alpha = np.sqrt(lambda_ / b11)
-    beta = np.sqrt(lambda_*b11 / (b11*b22 - b12*b12))
-    gamma = -b12*alpha*alpha*beta / lambda_
-    u0 = gamma*v0 / beta - b13*alpha*alpha / lambda_
+    v0      =  (b12*b13 - b11*b23) / (b11*b22 - b12*b12)
+    lambda_ =  b33 - (b13*b13 + v0*(b12*b13 - b11*b23)) / b11
+    alpha   =  sqrt(lambda_ / b11)
+    beta    =  sqrt(lambda_*b11 / (b11*b22 - b12*b12))
+    gamma   =  -b12*alpha*alpha*beta / lambda_
+    u0      =  gamma*v0 / beta - b13*alpha*alpha / lambda_
 
     return np.array([[ alpha, gamma,   u0 ],
                      [     0,  beta,   v0 ],
@@ -92,7 +95,7 @@ def estimate_intrinsics_assume_cxy_noskew(homographies, cxy):
 
     C = np.vstack(constraints)
     U, s, V = np.linalg.svd(C)
-    alpha, beta, _ = np.sqrt(1./V.T[:,-1])
+    alpha, beta, _ = sqrt(1./V.T[:,-1])
 
     return np.array([[ alpha,    0.,   u0 ],
                      [     0,  beta,   v0 ],
@@ -113,7 +116,7 @@ def get_extrinsics_from_homography(H, intrinsics):
     # Columns should be unit vectors
     M0_scale = np.linalg.norm(M0)
     M1_scale = np.linalg.norm(M1)
-    scale = np.sqrt(M0_scale) * np.sqrt(M1_scale)
+    scale = sqrt(M0_scale) * sqrt(M1_scale)
 
     M /= scale
     # Recover sign of scale factor by noting that observations
@@ -172,7 +175,7 @@ def _matrix_to_xyzrph(M):
     ty = M[1,3]
     tz = M[2,3]
     rx = np.arctan2(M[2,1], M[2,2])
-    ry = np.arctan2(-M[2,0], np.sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
+    ry = np.arctan2(-M[2,0], sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
     rz = np.arctan2(M[1,0], M[0,0])
     return tx, ty, tz, rx, ry, rz
 
@@ -213,7 +216,7 @@ def _reprojection_error(fx, fy, x, y, z, r, p, h, cx, cy, p_src, p_tgt, weights=
     W = np.diag(weights)
     p_tgt = np.transpose(p_tgt)
     sqerr = ((p_mapped - p_tgt)**2)
-    #print '   [ refine_homography ] rmse: %.4f' % np.sqrt(sqerr.dot(W).sum(axis=0).mean())
+    #print '   [ refine_homography ] rmse: %.4f' % sqrt(sqerr.dot(W).sum(axis=0).mean())
     return sqerr.dot(W).ravel()
 
 

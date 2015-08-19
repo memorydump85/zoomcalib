@@ -55,16 +55,6 @@ def local_homography_error(theta, args):
     return local_homography_error_impl(theta, src[:9], tgt[:9], src[9:25], tgt[9:25])
 
 
-def matrix_to_xyzrph(M):
-    tx = M[0,3]
-    ty = M[1,3]
-    tz = M[2,3]
-    rx = np.arctan2(M[2,1], M[2,2])
-    ry = np.arctan2(-M[2,0], sqrt(M[0,0]*M[0,0] + M[1,0]*M[1,0]))
-    rz = np.arctan2(M[1,0], M[0,0])
-    return np.array([tx, ty, tz, rx, ry, rz])
-
-
 #--------------------------------------
 class GPModel(object):
 #--------------------------------------
