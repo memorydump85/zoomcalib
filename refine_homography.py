@@ -4,55 +4,45 @@ from scipy.optimize import root, minimize
 
 
 
-def estimate_intrinsics(homographies):
+
+class IntrinsicsEstimationError(RuntimeError):
+    pass
+
+
+def _check_homographies(homographies, nmin):
+    assert all([ h.shape == (3,3)  for h in homographies ])
+
+    if len(homographies) < nmin:
+        raise IntrinsicsEstimationError(
+                'Need at least %d homographies to estimate intrinsics' % nmin )
+
+
+def _coeff_vec(H , i, j):
     """
-    Estimate camera intrinsics `K` from a list of `homographies`. The
-    method uses constraints imposed by the image of the absolute conic,
-    as described in:
-        Z. Zhang, "A flexible new technique for camera calibration",
-        Section 3.1,
-        IEEE Transactions on Pattern Analysis and Machine Intelligence
-
-    If `homographies` contains only one homography, the center of the
-    camera `cxy` in pixel coordinates must be known and supplied as an
-    input parameter.
-
-    if 'homographies' contains less than 3 homographies, the skew (or
-    aspect ratio) of the estimated intrinsics matrix `K` is assumed to
-    be equal to zero.
+    Helper function to compute the coefficient vector for
+    homography constraints
     """
-    assert len(homographies) > 0
-    assert homographies[0].shape == (3,3)
+    a0, a1, a2 = H[:,i]
+    b0, b1, b2 = H[:,j]
+    return np.array([
+                (a0*b0),
+                (a0*b1 + a1*b0),
+                (a1*b1),
+                (a2*b0 + a0*b2),
+                (a2*b1 + a1*b2),
+                (a2*b2)
+            ])
 
-    if len(homographies) == 1:
-        raise Exception(
-            'Need atleast 2 homographies to estimate intrinsics.\n' +
-            'Use `estimate_intrinsics_assume_cxy_noskew` if you need ' +
-            'to estimate intrinsics from just one homography')
 
-    constraints = []
-    for H in homographies:
+def _cam_matrix_from_B(b11, b12, b22, b13, b23, b33):
+    """
+    Given the matrix B describing the image of the absolute
+    conic, compute the intrinsics matrix K. We know that:
 
-        def c(i, j):
-            a0, a1, a2 = H[:,i]
-            b0, b1, b2 = H[:,j]
-            return np.array([
-                a0*b0, a0*b1 + a1*b0, a1*b1,
-                a2*b0 + a0*b2,a2*b1 + a1*b2, a2*b2 ])
-
-        constraints.append(c(0,1))
-        constraints.append(c(0,0) - c(1,1))
-
-    if len(homographies) == 2: # skew = 0
-        constraints.append(np.array([0, 1, 0, 0, 0, 0]))
-
-    C = np.vstack(constraints)
-    U, s, V = np.linalg.svd(C)
-
+                B = K.inv().T * K.inv()
+    """
     # 1-based indices. Yuck! But code is consistent with the
     # formulas in the paper.
-    b11, b12, b22, b13, b23, b33 = V.T[:,-1]
-
     v0      =  (b12*b13 - b11*b23) / (b11*b22 - b12*b12)
     lambda_ =  b33 - (b13*b13 + v0*(b12*b13 - b11*b23)) / b11
     alpha   =  sqrt(lambda_ / b11)
@@ -65,15 +55,66 @@ def estimate_intrinsics(homographies):
                      [     0,     0,    1 ]])
 
 
-def estimate_intrinsics_assume_cxy_noskew(homographies, cxy):
+def estimate_intrinsics(homographies):
+    """
+    Estimate camera intrinsics `K` from a list of `homographies`. The
+    method uses constraints imposed by the image of the absolute conic,
+    as described in:
+        Z. Zhang, "A flexible new technique for camera calibration",
+        Section 3.1,
+        IEEE Transactions on Pattern Analysis and Machine Intelligence
+
+    if `homographies` contains less than 3 homographies, the skew (or
+    aspect ratio) of the estimated intrinsics matrix `K` is constrained
+    to be close to zero.
+    """
+    _check_homographies(homographies, nmin=2)
+
+    constraints = []
+    for H in homographies:
+        constraints.append(_coeff_vec(H,0,1))
+        constraints.append(_coeff_vec(H,0,0) - _coeff_vec(H,1,1))
+
+    if len(homographies) == 2: # constrain skew = 0
+        constraints.append(np.array([0, 1, 0, 0, 0, 0]))
+
+    C = np.vstack(constraints)
+    U, s, Vt = np.linalg.svd(C)
+
+    b11, b12, b22, b13, b23, b33 = Vt.T[:,-1]
+    return _cam_matrix_from_B(b11, b12, b22, b13, b23, b33)
+
+
+def estimate_intrinsics_noskew(homographies):
+    """
+    Similar to `estimate_intrinsics`, but assumes the skew of the
+    camera `gamma` is zero.
+    """
+    _check_homographies(homographies, nmin=2)
+
+    constraints = []
+    for H in homographies:
+        constraints.append(_coeff_vec(H,0,1))
+        constraints.append(_coeff_vec(H,0,0) - _coeff_vec(H,1,1))
+
+    C = np.vstack(constraints)
+    # delete column corresponding to b12, since we know b12 == 0
+    C = np.delete(C, 1, axis=1)
+    U, s, Vt = np.linalg.svd(C)
+
+    b11, b22, b13, b23, b33 = Vt.T[:,-1]
+    b12 = 0.
+    return _cam_matrix_from_B(b11, b12, b22, b13, b23, b33)
+
+
+def estimate_intrinsics_noskew_assume_cxy(homographies, cxy):
     """
     Similar to `estimate_intrinsics`, but assumes that the camera
     center `cxy` is known, and the skew of the camera `gamma` is zero.
     These assumptions allow this method to estimate camera intrinsics
     from just one input homography.
     """
-    assert len(homographies) > 0
-    assert homographies[0].shape == (3,3)
+    _check_homographies(homographies, nmin=1)
 
     u0, v0 = cxy
 
@@ -94,8 +135,8 @@ def estimate_intrinsics_assume_cxy_noskew(homographies, cxy):
             ])
 
     C = np.vstack(constraints)
-    U, s, V = np.linalg.svd(C)
-    alpha, beta, _ = sqrt(1./V.T[:,-1])
+    U, s, Vt = np.linalg.svd(C)
+    alpha, beta, _ = np.sqrt(1./Vt.T[:,-1])
 
     return np.array([[ alpha,    0.,   u0 ],
                      [     0,  beta,   v0 ],
@@ -106,8 +147,8 @@ def get_extrinsics_from_homography(H, intrinsics):
     """
     Ideally `E = K.inv * H`, where `E` is the extrinsics and
     `K` is the camera intrinsics. However the resulting `E`
-    does not conform to a rigid body transform. So we do some
-    corrections so that `E` is a rigid body transform.
+    does not conform to a rigid body transform. Hence, we
+    correct `E` to conform to a rigid body transform.
     """
     M = np.linalg.inv(intrinsics).dot(H)
     M0 = M[:,0]

@@ -1,9 +1,6 @@
 import numpy as np
-from collections import namedtuple
+from tupletypes import Correspondence
 
-
-
-_Correspondence = namedtuple('_Correspondence', ['source', 'target'])
 
 
 class UnitWeightingFunction(object):
@@ -57,11 +54,11 @@ class WeightedLocalHomography(object):
     def add_correspondence(self, source_xy, target_xy):
         assert len(source_xy) == 2
         assert len(target_xy) == 2
-        self._corrs.append(_Correspondence(source_xy, target_xy))
+        self._corrs.append(Correspondence(source_xy, target_xy))
 
 
     def _precompute(self):
-        """ precompute normalization transforms and constraint
+        """ Precompute normalization transforms and constraint
         matrix. These remain the same for every homography query """
         if self._precompute_done == True:
             return
@@ -81,6 +78,15 @@ class WeightedLocalHomography(object):
         self._precompute_done = True
 
 
+    def regularized_weighting_function(self, p, q):
+        return self._weighting_func(p, q) + self.regularization_lambda**2
+
+
+    def get_correspondence_weights(self, src_pt):
+        """ How similar is `src_pt` to each source point in `self._corrs` """
+        return [ self.regularized_weighting_function(src_pt, c.source) for c in self._corrs ]
+
+
     def get_homography_at(self, src_pt):
         self._precompute()
 
@@ -88,19 +94,17 @@ class WeightedLocalHomography(object):
 
         # The weighting is a diagonal matrix that encodes how similar
         # `src_pt` is to each source point in `self._corrs`
-        w_diag = [ self._weighting_func(src_pt, c.source) for c in self._corrs ]
+        w_diag = self.get_correspondence_weights(src_pt)
 
         # Each correspondence produces 2 constraints. So weights also
         # need to be repeated
         W = np.diag(np.sqrt(np.repeat(w_diag, 2)))
         assert len(A) == len(W)
 
-        L = (self.regularization_lambda*self.regularization_lambda) * np.eye(A.shape[0])
-        U, s, V = np.linalg.svd((W + L).dot(A))
-
         # Homography is the total least squares solution: The eigen-vector
         # corresponding to the smallest eigen-value
-        H = V.T[:,-1].reshape((3,3))
+        U, s, Vt = np.linalg.svd(W.dot(A))
+        H = Vt.T[:,-1].reshape((3,3))
 
         return reduce(np.dot, [self._tgtXinv, H, self._srcX])
 
