@@ -2,16 +2,14 @@
 
 import numpy as np
 from math import sqrt
-from itertools import chain
 from skimage.io import imread
 from skimage.color import rgb2gray
 from scipy.optimize import minimize
+from sklearn.cross_validation import LeaveOneOut
 
 from apriltag import AprilTagDetector
 from tag36h11_mosaic import TagMosaic
 from projective_math import WeightedLocalHomography, SqExpWeightingFunction
-from refine_homography import estimate_intrinsics_assume_cxy_noskew
-from refine_homography import get_extrinsics_from_homography
 from gp import GaussianProcess, sqexp2D_covariancef
 
 
@@ -25,7 +23,7 @@ def create_local_homography_object(bandwidth, magnitude, lambda_):
     return H
 
 
-def local_homography_error_impl(theta, t_src, t_tgt, v_src, v_tgt):
+def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
     """
     This is the objective function used for optimizing parameters of
     the `SqExpWeightingFunction` used for local homography fitting
@@ -48,11 +46,6 @@ def local_homography_error_impl(theta, t_src, t_tgt, v_src, v_tgt):
 
     v_mapped = np.array([ H.map(s)[:2] for s in v_src ])
     return ((v_mapped - v_tgt)**2).sum(axis=1).mean()
-
-
-def local_homography_error(theta, args):
-    src, tgt = args
-    return local_homography_error_impl(theta, src[:9], tgt[:9], src[9:25], tgt[9:25])
 
 
 #--------------------------------------
@@ -131,12 +124,23 @@ def process(filename):
     #
     # To learn a weighted local homography, we find the weighting
     # function parameters that minimize reprojection error across
-    # validation folds of the data.
+    # leave-one-out validation folds of the data. Since the
+    # homography is local at the center, we only use 9 nearest
+    # detections to the center
     #
+    det_i9 = det_i[:9]
+    det_w9 = det_w[:9]
+
+    def local_homography_loocv_error(theta, args):
+        src, tgt = args
+        errs = [ local_homography_error(theta, src[t_ix], tgt[t_ix], src[v_ix], tgt[v_ix])
+                    for t_ix, v_ix in LeaveOneOut(len(src)) ]
+        return np.mean(errs)
+
     def learn_homography_i2w():
-        result = minimize( local_homography_error,
+        result = minimize( local_homography_loocv_error,
                     x0=[ 50, 1, 1e-3 ],
-                    args=[ det_i, det_w ],
+                    args=[ det_i9, det_w9 ],
                     method='Powell',
                     options={'ftol': 1e-3} )
 
@@ -148,16 +152,16 @@ def process(filename):
         print '  ' + str(result).replace('\n', '\n      ')
 
         H = create_local_homography_object(*result.x)
-        for i, w in zip(det_i, det_w):
+        for i, w in zip(det_i9, det_w9):
             H.add_correspondence(i, w)
 
         return H
 
     def learn_homography_w2i():
-        result = minimize( local_homography_error,
+        result = minimize( local_homography_loocv_error,
                     x0=[ 0.0254, 1, 1e-3 ],
                     method='Powell',
-                    args=[ det_w, det_i ],
+                    args=[ det_w9, det_i9 ],
                     options={'ftol': 1e-3} )
 
         print '\nHomography: w->i'
@@ -168,7 +172,7 @@ def process(filename):
         print '  ' + str(result).replace('\n', '\n      ')
 
         H = create_local_homography_object(*result.x)
-        for w, i in zip(det_w, det_i):
+        for w, i in zip(det_w9, det_i9):
             H.add_correspondence(w, i)
 
         return H
@@ -178,11 +182,12 @@ def process(filename):
     # the image and we are interesting in the word to image
     # homography at the center of the image. However, we don't
     # know the center of the image in world coordinates.
-    # So we follow the sequence:
+    # So we follow a procedure as explained below:
     #
     # First, we learn a homography from image to world
-    # Next, find where the image center `c_i` maps to in world coordinates (`c_w`)
-    # Finally, find the local homography `LH0` from world to image at `c_w`
+    # Next, we find where the image center `c_i` maps to in
+    # world coordinates (`c_w`). Finally, we find the local
+    # homography `LH0` from world to image at `c_w`
     #
     H_iw = learn_homography_i2w()
     c_i = np.array([im.shape[1], im.shape[0]]) / 2.
