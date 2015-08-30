@@ -1,10 +1,9 @@
 import sys
 import os, os.path, shutil
 from subprocess import Popen, check_call, check_output, STDOUT
-from PIL.ExifTags import TAGS
 from cStringIO import StringIO
 
-def get_camera_image():
+def get_camera_image(output_folder):
     sys.stdout.write('  Acquiring image ...\r')
     sys.stdout.flush()
 
@@ -28,14 +27,24 @@ def get_camera_image():
 
     print '  Image acquired. Focal length =', focal_length
 
-    if not os.path.exists('/var/tmp/capture'):
-        os.mkdir('/var/tmp/capture')
+    if not os.path.exists(output_folder):
+        os.mkdir(output_folder)
 
     print '  Converting image to .png'
-    filename = '/var/tmp/capture/%03d' % focal_length
+    filename = 'output_folder/%03d' % focal_length
     shutil.copyfile('/tmp/cap.jpeg', filename + '.jpeg')
     Popen(['convert', filename + '.jpeg', filename + '.png'])
 
-while True:
-	get_camera_image()
-	raw_input("Press Enter to continue...")
+
+def main():
+    if len(sys.argv) != 2:
+        print '  USAGE: capture_static.py <output-folder>'
+        sys.exit(-1)
+
+    output_folder = sys.argv[1]
+    while True:
+        get_camera_image(output_folder)
+        raw_input("Press Enter to continue...")
+
+if __name__ == '__main__':
+    main()
