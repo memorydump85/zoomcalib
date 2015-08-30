@@ -1,3 +1,5 @@
+#! /usr/bin/python
+
 import sys
 import os.path
 import numpy as np
@@ -29,7 +31,7 @@ class HomographyModel(object):
     def load_from_file(class_, filename):
         # parse the filename to get intrinsic/extrinsic tags
         filestem = os.path.splitext(filename)[0]
-        etag, itag = filename.split('/')[-2:]
+        etag, itag = filestem.split('/')[-2:]
 
         with open(filename) as f:
             LH0 = pickle.load(f)

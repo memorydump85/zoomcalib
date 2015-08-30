@@ -7,7 +7,7 @@ from collections import OrderedDict
 from scipy.optimize import root
 
 from projective_math import SqExpWeightingFunction
-from refine_homography import estimate_intrinsics
+from refine_homography import estimate_intrinsics_noskew_assume_cxy
 from refine_homography import estimate_intrinsics_noskew
 from refine_homography import get_extrinsics_from_homography
 from refine_homography import  _matrix_to_xyzrph, _matrix_to_intrinsics
@@ -122,10 +122,7 @@ class HomographyConstraint(object):
 #--------------------------------------
     def __init__(self, hmodel, inode, enode):
         H_wi, c_w, _ = hmodel.hinfo
-        wfunc = H_wi.regularized_weighting_function
-
-        w0 = wfunc(c_w, c_w)
-        weights = np.array(H_wi.get_correspondence_weights(c_w)) / w0
+        weights = np.array(H_wi.get_correspondence_weights(c_w))
 
         # 3-D homogeneous form with z=0
         p_src = [ c.source for c in H_wi._corrs ]
@@ -157,7 +154,7 @@ class HomographyConstraint(object):
         return ((p_mapped - self.p_tgt)**2)
 
 
-    def sq_reprojection_errors(self):
+    def sq_errors(self):
         sqerr = self.sq_unweighted_reprojection_errors()
         return sqerr.dot(self.W).ravel()
 
@@ -172,11 +169,12 @@ class ConstraintGraph(object):
 
 
     def constraint_errors(self):
-        return np.hstack([ c.sq_reprojection_errors() for c in self.constraints ])
+        return np.hstack([ c.sq_errors() for c in self.constraints ])
 
 
     def sq_pixel_errors(self):
-        return np.hstack([ c.sq_unweighted_reprojection_errors() for c in self.constraints ])
+        homography_constraints = ( c for c in self.constraints if isinstance(c, HomographyConstraint) )
+        return np.hstack([ c.sq_unweighted_reprojection_errors() for c in homography_constraints ])
 
 
     def _pack_into_vector(self):
@@ -198,7 +196,25 @@ class ConstraintGraph(object):
         for enode, eval_ in zip(self.enodes.values(), estate):
             enode.set_value(*eval_)
 
+
     state = property(_pack_into_vector, _unpack_from_vector)
+
+
+    def _pack_intrinsics_into_vector(self):
+        """ pack intrinsic node states into a vector """
+        return np.hstack([ i.to_tuple() for i in self.inodes.values() ])
+
+
+    def _unpack_intrinsics_from_vector(self, v):
+        """ Set intrinsic node values from the vector `v` """
+        istate = np.reshape(v, (-1, 4))
+
+        for inode, ival in zip(self.inodes.values(), istate):
+            inode.set_value(*ival)
+
+
+    istate = property(_pack_intrinsics_into_vector, _unpack_intrinsics_from_vector)
+
 
 
 def main():
@@ -243,8 +259,10 @@ def main():
             estimates.append(_matrix_to_xyzrph(E))
         graph.enodes[etag] = ExtrinsicsNode(*np.mean(estimates, axis=0), tag=etag)
 
-    print '%d intrinsic nodes' % len(graph.inodes)
-    print '%d extrinsic nodes' % len(graph.enodes)
+    print 'Graph'
+    print '-----'
+    print '  %d intrinsic nodes' % len(graph.inodes)
+    print '  %d extrinsic nodes' % len(graph.enodes)
 
     #
     # Connect nodes by constraints
@@ -267,6 +285,11 @@ def main():
         for itag, inode in graph.inodes.iteritems():
             print '  intrinsics@ ' + itag + " =", np.array(inode.to_tuple())
 
+    print '\n\n'
+    print '====================='
+    print '  Optimization 1'
+    print '====================='
+    print '    Optimizing all intrinsics and extrinisics'
     print_graph_summary('Initial:')
 
     def objective(x):
@@ -275,16 +298,47 @@ def main():
 
     print '\nOptimizing graph ...'
     x0 = graph.state
-    result = root(objective, x0, method='lm')
+    result = root(objective, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
     print '  Success: ' + str(result.success)
     print '  %s' % result.message
 
+    graph.state = result.x
     print_graph_summary('Final:')
+
+    #
+    # Now keep the extrinisics and optimize the intrinsics
+    # for pose0. This overfits the intrinsics for pose0
+    #
+    pose0_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
+    pose0_constraints = [ c for c in pose0_constraints if c.enode.tag == 'pose0' ]
+    graph.constraints = pose0_constraints
+
+    print '\n\n'
+    print '====================='
+    print '  Optimization 2'
+    print '====================='
+    print '    Optimizing Pose0 intrinsics'
+    print_graph_summary('Initial:')
+
+    def objective2(x):
+        graph.istate = x
+        return graph.constraint_errors()
+
+    print '\nOptimizing graph ...'
+    x0 = graph.istate
+    result = root(objective2, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
+    print '  Success: ' + str(result.success)
+    print '  %s' % result.message
+
+    graph.istate = result.x
+    print_graph_summary('Final:')
+
 
     #
     # Write out the refined homographies
     #
-    for constraint in graph.constraints:
+    homography_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
+    for constraint in homography_constraints:
         etag, itag = constraint.enode.tag, constraint.inode.tag
         K = constraint.inode.to_matrix()
         E = constraint.enode.to_matrix()
