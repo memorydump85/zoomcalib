@@ -49,7 +49,6 @@ class HomographyModel(object):
         instance = class_(hinfo)
         instance.etag = etag
         instance.itag = itag
-
         return instance
 
 
@@ -122,7 +121,7 @@ class HomographyConstraint(object):
 #--------------------------------------
     def __init__(self, hmodel, inode, enode):
         H_wi, c_w, _ = hmodel.hinfo
-        weights = np.array(H_wi.get_correspondence_weights(c_w))
+        weights = H_wi.get_correspondence_weights(c_w)
 
         # 3-D homogeneous form with z=0
         p_src = [ c.source for c in H_wi._corrs ]
@@ -263,6 +262,7 @@ def main():
     print '-----'
     print '  %d intrinsic nodes' % len(graph.inodes)
     print '  %d extrinsic nodes' % len(graph.enodes)
+    print ''
 
     #
     # Connect nodes by constraints
@@ -272,6 +272,9 @@ def main():
         enode = graph.enodes[hm.etag]
         constraint = HomographyConstraint(hm, inode, enode)
         graph.constraints.append(constraint)
+
+        rmse = np.sqrt(constraint.sq_unweighted_reprojection_errors().mean())
+        print '  %s %s rmse: %.2f' % (hm.etag, hm.itag, rmse)
 
     #
     # Optimize graph to reduce error in constraints
@@ -285,57 +288,47 @@ def main():
         for itag, inode in graph.inodes.iteritems():
             print '  intrinsics@ ' + itag + " =", np.array(inode.to_tuple())
 
-    print '\n\n'
-    print '====================='
-    print '  Optimization 1'
-    print '====================='
-    print '    Optimizing all intrinsics and extrinisics'
-    print_graph_summary('Initial:')
-
     def objective(x):
         graph.state = x
         return graph.constraint_errors()
 
-    print '\nOptimizing graph ...'
-    x0 = graph.state
-    result = root(objective, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
-    print '  Success: ' + str(result.success)
-    print '  %s' % result.message
+    def optimize_graph():
+        x0 = graph.state
+        print_graph_summary('Initial:')
 
-    graph.state = result.x
-    print_graph_summary('Final:')
+        print '\nOptimizing graph ...'
+        result = root(objective, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
+        print '  Success: ' + str(result.success)
+        print '  %s' % result.message
+
+        graph.state = result.x
+        print_graph_summary('Final:')
+
+    print '\n'
+    print '====================='
+    print '  Optimization 1'
+    print '====================='
+    print '    Optimizing all intrinsics and extrinisics'
+
+    optimize_graph()
 
     #
-    # Now keep the extrinisics and optimize the intrinsics
-    # for pose0. This overfits the intrinsics for pose0
+    # Now optimize with just the constraints of pose0
     #
     pose0_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
     pose0_constraints = [ c for c in pose0_constraints if c.enode.tag == 'pose0' ]
     graph.constraints = pose0_constraints
 
-    print '\n\n'
+    print '\n'
     print '====================='
     print '  Optimization 2'
     print '====================='
     print '    Optimizing Pose0 intrinsics'
-    print_graph_summary('Initial:')
 
-    def objective2(x):
-        graph.istate = x
-        return graph.constraint_errors()
-
-    print '\nOptimizing graph ...'
-    x0 = graph.istate
-    result = root(objective2, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
-    print '  Success: ' + str(result.success)
-    print '  %s' % result.message
-
-    graph.istate = result.x
-    print_graph_summary('Final:')
-
+    optimize_graph()
 
     #
-    # Write out the refined homographies
+    # Write out the refined intrinsics and extrinsics
     #
     homography_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
     for constraint in homography_constraints:
@@ -345,7 +338,7 @@ def main():
         H = K.dot(E)
         filename = '%s/%s/%s.lh0+' % (folder, etag, itag)
         with open(filename, 'w') as f:
-            pickle.dump(H, f)
+            pickle.dump((K, E), f)
 
 
 if __name__ == '__main__':
