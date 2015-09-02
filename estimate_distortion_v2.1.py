@@ -7,11 +7,11 @@ from collections import OrderedDict
 from scipy.optimize import root
 
 from projective_math import SqExpWeightingFunction
-from refine_homography import estimate_intrinsics_noskew_assume_cxy
-from refine_homography import estimate_intrinsics_noskew
-from refine_homography import get_extrinsics_from_homography
-from refine_homography import  _matrix_to_xyzrph, _matrix_to_intrinsics
-from refine_homography import _xyzrph_to_matrix, _intrisics_to_matrix
+from camera_math import estimate_intrinsics_noskew_assume_cxy
+from camera_math import estimate_intrinsics_noskew
+from camera_math import get_extrinsics_from_homography
+from camera_math import matrix_to_xyzrph, matrix_to_intrinsics
+from camera_math import xyzrph_to_matrix, intrisics_to_matrix
 from tupletypes import WorldImageHomographyInfo
 
 
@@ -83,7 +83,7 @@ class IntrinsicsNode(object):
         return repr(self.to_tuple())
 
     def to_matrix(self):
-        return _intrisics_to_matrix(*self.to_tuple())
+        return intrisics_to_matrix(*self.to_tuple())
 
 
 #-------------------------------------
@@ -113,7 +113,7 @@ class ExtrinsicsNode(object):
         return repr(self.to_tuple())
 
     def to_matrix(self):
-        return _xyzrph_to_matrix(*self.to_tuple())
+        return xyzrph_to_matrix(*self.to_tuple())
 
 
 #--------------------------------------
@@ -242,7 +242,7 @@ def main():
     for itag, group in groupby(hmodels, key=itag_getter):
         homographies = [ hm.homography_at_center() for hm in group ]
         K = estimate_intrinsics_noskew(homographies)
-        graph.inodes[itag] = IntrinsicsNode(*_matrix_to_intrinsics(K), tag=itag)
+        graph.inodes[itag] = IntrinsicsNode(*matrix_to_intrinsics(K), tag=itag)
 
     #
     # Construct extrinsic nodes
@@ -255,7 +255,7 @@ def main():
         for hm in group:
             K = graph.inodes.get(hm.itag).to_matrix()[:,:3]
             E = get_extrinsics_from_homography(hm.homography_at_center(), K)
-            estimates.append(_matrix_to_xyzrph(E))
+            estimates.append(matrix_to_xyzrph(E))
         graph.enodes[etag] = ExtrinsicsNode(*np.mean(estimates, axis=0), tag=etag)
 
     print 'Graph'

@@ -4,7 +4,7 @@ import os.path
 import numpy as np
 import cPickle as pickle
 
-from refine_homography import  _matrix_to_xyzrph, _matrix_to_intrinsics
+from camer_math import matrix_to_xyzrph, matrix_to_intrinsics
 
 
 
@@ -39,8 +39,8 @@ class CameraCalibration(object):
         instance = class_()
         instance.etag = etag
         instance.itag = itag
-        instance.intrinsics = _matrix_to_intrinsics(K)
-        instance.extrinsics = _matrix_to_xyzrph(E)
+        instance.intrinsics = matrix_to_intrinsics(K)
+        instance.extrinsics = matrix_to_xyzrph(E)
         instance.undistortion = undistortion
         return instance
 

@@ -4,7 +4,6 @@ from scipy.optimize import root, minimize
 
 
 
-
 class IntrinsicsEstimationError(RuntimeError):
     pass
 
@@ -180,7 +179,7 @@ def get_extrinsics_from_homography(H, intrinsics):
     return E
 
 
-def _xyzrph_to_matrix(x, y, z, r, p, h):
+def xyzrph_to_matrix(x, y, z, r, p, h):
     from numpy import cos, sin
 
     rotx = lambda t: \
@@ -211,7 +210,7 @@ def _xyzrph_to_matrix(x, y, z, r, p, h):
         [ translate(x, y, z), rotz(h), roty(p), rotx(r) ])
 
 
-def _matrix_to_xyzrph(M):
+def matrix_to_xyzrph(M):
     tx = M[0,3]
     ty = M[1,3]
     tz = M[2,3]
@@ -221,124 +220,11 @@ def _matrix_to_xyzrph(M):
     return tx, ty, tz, rx, ry, rz
 
 
-def _intrisics_to_matrix(fx, fy, cx, cy):
+def intrisics_to_matrix(fx, fy, cx, cy):
     return np.array([[ fx,   0,  cx,  0. ],
                      [  0,  fy,  cy,  0. ],
                      [  0,   0,   1,  0. ]])
 
 
-def _matrix_to_intrinsics(K):
+def matrix_to_intrinsics(K):
     return K[0,0], K[1,1], K[0,2], K[1,2]
-
-
-def _reprojection_error(fx, fy, x, y, z, r, p, h, cx, cy, p_src, p_tgt, weights=None):
-    """
-    compute the mean geometric reprojection error of the world
-    points `p_src` through this homography.
-    """
-    K = _intrisics_to_matrix(fx, fy, cx, cy)
-    E = _xyzrph_to_matrix(x, y, z, r, p, h)
-    H = K.dot(E)
-
-    # convert to 3-D homogeneous form with z=0
-    N = len(p_src)
-    p_src = np.hstack([ p_src, np.zeros((N,1)), np.ones((N,1)) ])
-    p_src = p_src.T
-
-    p_mapped = H.dot(p_src)[:3,:]
-
-    # normalize homogeneous coordinates
-    M = np.diag(1./p_mapped[2,:])
-    p_mapped = p_mapped[:2,:].dot(M)
-
-    if weights == None:
-        weights = np.ones((N,))
-
-    W = np.diag(weights)
-    p_tgt = np.transpose(p_tgt)
-    sqerr = ((p_mapped - p_tgt)**2)
-    #print '   [ refine_homography ] rmse: %.4f' % sqrt(sqerr.dot(W).sum(axis=0).mean())
-    return sqerr.dot(W).ravel()
-
-
-def refine_homography(H0, cxy, p_src, p_tgt, weights=None):
-    """
-    Refine the homography H by minimizing reprojection error
-    using non-linear optimization
-    """
-    K0 = estimate_intrinsics_assume_cxy_noskew([H0], cxy)
-    E0 = get_extrinsics_from_homography(H0, K0)
-
-    fx, fy, cx, cy = _matrix_to_intrinsics(K0)
-    x, y, z, r, p, h = _matrix_to_xyzrph(E0)
-
-    #objective = lambda theta, args: \
-    def objective(theta, *args):
-        v = tuple(theta) + args
-        return _reprojection_error(*v)
-
-    x0 = fx, fy, x, y, z, r, p, h
-    args = cx, cy, p_src, p_tgt, weights
-    result = root(objective, x0, args, method='lm')
-    # print result
-
-    fx, fy, x, y, z, r, p, h = result.x
-
-    K = _intrisics_to_matrix(fx, fy, cx, cy)
-    E = _xyzrph_to_matrix(x, y, z, r, p, h)
-    H = K.dot(E)
-
-    # print ''
-    # print 'H =\n', H0
-    # print H
-    # print '\nK =\n', K0
-    # print K
-    # print '\nE =\n', E0
-    # print E
-    # print ''
-
-    return H
-
-
-def main():
-    from skimage.io import imread
-    from skimage.color import rgb2gray
-    from apriltag import AprilTagDetector
-    from tag36h11_mosaic import TagMosaic
-
-    np.set_printoptions(precision=4, suppress=True)
-
-    filename = "/var/tmp/capture/38.png"
-    print '\n========================================'
-    print '  File: ' + filename
-    print '========================================\n'
-
-    im = imread(filename)
-    im = rgb2gray(im)
-    im = (im * 255.).astype(np.uint8)
-
-    tag_mosaic = TagMosaic(0.0254)
-    detections = AprilTagDetector().detect(im)
-    print '  %d tags detected.' % len(detections)
-
-    #
-    # Sort detections by distance to center
-    #
-    c_i = np.array([im.shape[1], im.shape[0]]) / 2.
-    dist = lambda p_i: np.linalg.norm(p_i - c_i)
-    closer_to_center = lambda d1, d2: int(dist(d1.c) - dist(d2.c))
-    detections.sort(cmp=closer_to_center)
-
-    mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
-
-    det_i = np.array([ d.c for d in detections ])
-    det_w = np.array([ mosaic_pos(d) for d in detections ])
-
-    H = np.array([[ 4828.4188,    72.3635,  -274.7845 ],
-                  [  -52.191,  -4826.676,    -25.5858 ],
-                  [   -0.0391,     0.05,       0.5939 ]])
-
-    print refine_homography(H, c_i, det_w[:4], det_i[:4])
-
-if __name__ == '__main__':
-    main()
