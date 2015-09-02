@@ -4,7 +4,7 @@ import os.path
 import numpy as np
 import cPickle as pickle
 
-from camer_math import matrix_to_xyzrph, matrix_to_intrinsics
+from camera_math import matrix_to_xyzrph, matrix_to_intrinsics
 
 
 
