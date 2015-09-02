@@ -50,7 +50,7 @@ cpdef gram_matrix_sq_exp_2D(
     float64_t sigma_xx,         # 2D length-scale parameters
     float64_t sigma_yy,         #   ..
     float64_t corr_xy,          #   ..
-    float64_t sigma_inv_noise   #   ..
+    float64_t sigma_inv_noise   # sqrt(noise precision)
     ):
 
     cdef np.ndarray[float64_t, ndim=2] Sigma, Sigma_inv

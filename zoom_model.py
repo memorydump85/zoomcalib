@@ -46,10 +46,12 @@ class CameraCalibration(object):
 
 
     def undistortion_data(self):
-        """ undistortion augmented with zoom data, such that
-        the data has the columns [ X, Y, Zoom, U, V ] """
+        """
+        undistortion augmented with zoom data, such that
+        the data has the columns [ X, Y, Zoom, U, V ]
+        """
         N = len(self.undistortion)
-        zoom = [ float(self.itag) ]*N
+        zoom = np.repeat(float(self.itag), N)
         x, y, u, v = self.undistortion.T
         return np.vstack([ x, y, zoom, u, v ]).T
 
@@ -62,7 +64,6 @@ def main():
 
     calibrations = [ CameraCalibration.load_from_file(f) for f in sys.argv[1:] ]
     undistortion_data = np.vstack([ cc.undistortion_data() for cc in calibrations ])
-    print undistortion_data
 
     #
     # Visualization

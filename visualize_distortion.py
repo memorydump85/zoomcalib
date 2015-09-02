@@ -122,20 +122,22 @@ def save_plot(hmodel):
     #
     # Fit non-parametric model to the observations
     #
-    model = GPModel(det_i, undistortion)
+    model = None
+    if True:
+        model = GPModel(det_i, undistortion)
 
-    print '\nGP Hyper-parameters'
-    print '---------------------'
-    print '  x: ', model._gp_x._covf.theta
-    print '        log-likelihood: %.4f' % model._gp_x.model_evidence()
-    print '  y: ', model._gp_y._covf.theta
-    print '        log-likelihood: %.4f' % model._gp_y.model_evidence()
-    print ''
-    print '  Optimization detail:'
-    print '  [ x ]'
-    print '  ' + str(model._gp_x.fit_result).replace('\n', '\n      ')
-    print '  [ y ]'
-    print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
+        print '\nGP Hyper-parameters'
+        print '---------------------'
+        print '  x: ', model._gp_x._covf.theta
+        print '        log-likelihood: %.4f' % model._gp_x.model_evidence()
+        print '  y: ', model._gp_y._covf.theta
+        print '        log-likelihood: %.4f' % model._gp_y.model_evidence()
+        print ''
+        print '  Optimization detail:'
+        print '  [ x ]'
+        print '  ' + str(model._gp_x.fit_result).replace('\n', '\n      ')
+        print '  [ y ]'
+        print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
 
     #
     # Visualization
@@ -178,16 +180,17 @@ def save_plot(hmodel):
     plt.axis('equal')
 
     #__4__
-    plt.subplot(224)
-    plt.title('Scaled Undistortion')
-    H, W = im.shape
-    grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
-    predicted = model.predict(grid)
-    X, Y = grid[:,0], grid[:,1]
-    U, V = predicted[:,0], predicted[:,1]
-    plt.quiver(X, Y, U, -V, units='dots')
-    plt.gca().invert_yaxis()
-    plt.axis('equal')
+    if model is not None:
+        plt.subplot(224)
+        plt.title('Scaled Undistortion')
+        H, W = im.shape
+        grid = np.array([[x, y] for y in xrange(0, H, 80) for x in xrange(0, W, 80)])
+        predicted = model.predict(grid)
+        X, Y = grid[:,0], grid[:,1]
+        U, V = predicted[:,0], predicted[:,1]
+        plt.quiver(X, Y, U, -V, units='dots')
+        plt.gca().invert_yaxis()
+        plt.axis('equal')
 
     plt.tight_layout()
     plt.gcf().patch.set_facecolor('#dddddd')

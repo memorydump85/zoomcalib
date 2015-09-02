@@ -5,6 +5,7 @@ from math import sqrt
 import os.path
 from skimage.io import imread
 from skimage.color import rgb2gray
+from skimage.transform import rescale as imrescale
 from scipy.optimize import minimize
 from sklearn.cross_validation import LeaveOneOut
 
@@ -49,6 +50,34 @@ def local_homography_error(theta, t_src, t_tgt, v_src, v_tgt):
     return ((v_mapped - v_tgt)**2).sum(axis=1).mean()
 
 
+def get_tag_detections(im):
+    #
+    # Because of a bug in the tag detector, it doesn't seem
+    # to detect tags larger than a certain size. To work-around
+    # this limitation, we detect tags on two different image
+    # scales and use the one with more detections
+    #
+    assert len(im.shape) == 2
+    im4 = imrescale(im, 1./4)
+
+    im  = ( im * 255.).astype(np.uint8)
+    im4 = (im4 * 255.).astype(np.uint8)
+
+    detections1 = AprilTagDetector().detect(im)
+    detections4 = AprilTagDetector().detect(im4)
+    for d in detections4:
+        d.c[0] *= 4.
+        d.c[1] *= 4.
+
+    # note that everything other than the tag center is wrong
+    # in detections4
+
+    if len(detections4) > len(detections1):
+        return detections4
+    else:
+        return detections1
+
+
 def get_homography_model(filename):
     #
     # Conventions:
@@ -61,12 +90,10 @@ def get_homography_model(filename):
     print '  File: ' + filename
     print '========================================\n'
 
-    im = imread(filename)
-    im = rgb2gray(im)
-    im = (im * 255.).astype(np.uint8)
+    im  = imread(filename)
+    im  = rgb2gray(im)
 
-    tag_mosaic = TagMosaic(0.0254)
-    detections = AprilTagDetector().detect(im)
+    detections = get_tag_detections(im)
     print '  %d tags detected.' % len(detections)
 
     #
@@ -77,6 +104,7 @@ def get_homography_model(filename):
     closer_to_center = lambda d1, d2: int(dist(d1.c) - dist(d2.c))
     detections.sort(cmp=closer_to_center)
 
+    tag_mosaic = TagMosaic(0.0254)
     mosaic_pos = lambda det: tag_mosaic.get_position_meters(det.id)
 
     det_i = np.array([ d.c for d in detections ])

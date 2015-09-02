@@ -287,6 +287,7 @@ def main():
         print ''
         for itag, inode in graph.inodes.iteritems():
             print '  intrinsics@ ' + itag + " =", np.array(inode.to_tuple())
+        print '  extrinsics@ pose0 =', np.array(graph.enodes['pose0'].to_tuple())
 
     def objective(x):
         graph.state = x
@@ -313,17 +314,19 @@ def main():
     optimize_graph()
 
     #
-    # Now optimize with just the constraints of pose0
+    # Now optimize with just the constraints of
+    # the poses required for estimating distortion
     #
-    pose0_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
-    pose0_constraints = [ c for c in pose0_constraints if c.enode.tag == 'pose0' ]
-    graph.constraints = pose0_constraints
+    candidate_poses = set(sys.argv[2:])
+    candidate_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
+    candidate_constraints = [ c for c in candidate_constraints if c.enode.tag in candidate_poses ]
+    graph.constraints = candidate_constraints
 
     print '\n'
     print '====================='
     print '  Optimization 2'
     print '====================='
-    print '    Optimizing Pose0 intrinsics'
+    print '    Optimizing candidate intrinsics (%d constraints)' % len(graph.constraints)
 
     optimize_graph()
 
@@ -339,7 +342,6 @@ def main():
         filename = '%s/%s/%s.lh0+' % (folder, etag, itag)
         with open(filename, 'w') as f:
             pickle.dump((K, E), f)
-
 
 if __name__ == '__main__':
     main()
