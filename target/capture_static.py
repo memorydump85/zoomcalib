@@ -31,7 +31,7 @@ def get_camera_image(output_folder):
         os.mkdir(output_folder)
 
     print '  Converting image to .png'
-    filename = 'output_folder/%03d' % focal_length
+    filename = '%s/%03d' % (output_folder, focal_length)
     shutil.copyfile('/tmp/cap.jpeg', filename + '.jpeg')
     Popen(['convert', filename + '.jpeg', filename + '.png'])
 
