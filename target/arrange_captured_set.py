@@ -16,13 +16,13 @@ def get_focal_length_from_EXIF(filename):
     if focal_length is None:
         raise Exception('EXIF data did not contain Focal Length information!')
 
-    print 'detected zoom level %d' % focal_length
+    print '%s: zoom level %d' % (filename, focal_length)
     return focal_length
 
 
 def main():
     folder = sys.argv[1]
-    filenames = glob.glob(folder + '/*.JPG')
+    filenames = sorted(glob.glob(folder + '/*.JPG'))
     zoom_values = [ get_focal_length_from_EXIF(f) for f in filenames ]
 
     # create folders for zoom values
@@ -40,7 +40,7 @@ def main():
     for zoom, file_group in groupby(files_and_zooms, key=zoom_getter):
         subfolder = '%03d' % zoom
         for i, (filename, _) in enumerate(file_group):
-            command = [ "convert", filename, folder+'/'+subfolder+'/'+str(i)+'.png' ]
+            command = [ "convert", filename, folder+'/'+subfolder+'/pose'+str(i)+'.png' ]
             print ' '.join(command)
             Popen(command)
 
