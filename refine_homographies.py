@@ -298,7 +298,7 @@ def main():
         print_graph_summary('Initial:')
 
         print '\nOptimizing graph ...'
-        result = root(objective, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
+        result = root(objective, x0, method='lm', options={'factor': 0.1, 'col_deriv': 1})
         print '  Success: ' + str(result.success)
         print '  %s' % result.message
 

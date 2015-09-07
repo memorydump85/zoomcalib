@@ -39,8 +39,8 @@ class HomographyModel(object):
     @classmethod
     def load_from_file(class_, filename):
         # parse the filename to get intrinsic/extrinsic tags
-        etag, itag = filename.split('/')[-2:]
-        itag = itag.split('.')[0]
+        itag, etag = filename.split('/')[-2:]
+        etag = etag.split('.')[0]
 
         with open(filename) as f:
             hinfo = pickle.load(f)
@@ -224,7 +224,7 @@ def main():
     np.set_printoptions(precision=4, suppress=True)
 
     folder = sys.argv[1]
-    saved_files = iglob(folder + '/pose?/*.lh0')
+    saved_files = iglob(folder + '/*/*.lh0')
     hmodels = [ HomographyModel.load_from_file(f) for f in saved_files ]
     print '%d hmodels\n' % len(hmodels)
 
@@ -245,7 +245,7 @@ def main():
         inode = IntrinsicsNode(*matrix_to_intrinsics(K), tag=itag)
 
         # For each HomographyModel in `group` construct an ExtrinsicsNode
-        enode_tags = [ '%s/%s' % (hm.etag, itag) for hm in group ]
+        enode_tags = [ '%s/%s' % (itag, hm.etag) for hm in group ]
         E_matrices = ( get_extrinsics_from_homography(H, K) for H in homographies )
         enodes = [ ExtrinsicsNode(*matrix_to_xyzrph(E), tag=tag) for E, tag in zip(E_matrices, enode_tags) ]
 
@@ -296,7 +296,7 @@ def main():
         print_graph_summary('Initial:')
 
         print '\nOptimizing graph ...'
-        result = root(objective, x0, method='lm', options={'factor': 100, 'col_deriv': 1})
+        result = root(objective, x0, method='lm', options={'factor': 0.1, 'col_deriv': 1})
         print '  Success: ' + str(result.success)
         print '  %s' % result.message
 
