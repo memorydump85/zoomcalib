@@ -1,0 +1,379 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass ieeeconf
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+A Non-Parametric distortion model for a Zoom Lens
+\end_layout
+
+\begin_layout Author
+Pradeep Ranganathan and Edwin Olson
+\end_layout
+
+\begin_layout Abstract
+An accurate calibration of a zoom camera should capture the variation in
+ both the intrinsic and lens-distortion parameters across the zoom range
+ of the lens.
+\end_layout
+
+\begin_layout Abstract
+In a zoom lens, the complexity of lens distortion does not remain constant
+ throughout the zoom range.
+ Consequently, using a fixed degree polynomial to model lens-distortion
+ can lead to biased results.
+\end_layout
+
+\begin_layout Abstract
+Furthermore, misaligned optical components in the lens can produce distortions
+ that cannot be captured completely with only a radial distortion model.
+ It is important to capture, or at least detect the presence of, these non-radia
+l distortions.
+\end_layout
+
+\begin_layout Abstract
+In this work, we model the distortion in a zoom lens using a non-parametric
+ local homography technique.
+ Our evaluation shows that our method is accurate and flexible enough to
+ capture the distortion in a zoom lens.
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+Zoom lenses are widely used in modern surveillance systems because they
+ allow the user to switch between observing a wide field of view and zooming
+ in on an object to see it in detail.
+ In the case of robotic surveillance, it is faster to zoom in than to travel
+ closer to the object while tracking or inspecting an object.
+ Thus, cameras fitted with a zoom lens are a standard component of aerial
+ vehicles used for surveillance and photography.
+\end_layout
+
+\begin_layout Standard
+The availability of an accurate calibration for a zoom lens enables good
+ photogrammetric registration of video frames, while continuously zooming
+ in and out.
+ This registration aids in the ability to continuously track an object while
+ zooming, or create accurate panoramas from a sequence of aerial photographs.
+\end_layout
+
+\begin_layout Standard
+The straightforward approach to calibrate a zoom lens is to perform a series
+ of fixed camera calibrations at a fixed set of zoom values and then define
+ a method to interpolate between the intrinsic and lens parameters at intermedia
+te zoom values.
+ But this standard interpolation approach forces a low-degree polynomial
+ model assumption for modeling lens distortion.
+ This low-degree polynomial assumption might not hold for the varying distortion
+ exhibited by the zoom lens across its zoom range.
+\end_layout
+
+\begin_layout Standard
+A more pressing issue is the presence of non-radial distortion in zoom lenses.
+ By nature of their construction, lenses exhibit distortion that is predominantl
+y radial: dominated by a component that is along the radius of the image
+ and symmetric about the optical center.
+ Hence, it is common to assume a radial model for lens-distortion.
+ However, zoom lenses have multiple optical elements and any misalignment
+ in these elements manifests in distortions that are orthogonal to the radial
+ component.
+ This is a real concern with lenses used in robotic applications because
+ they are often subject to physical shock that can cause changes in the
+ alignment of lens elements.
+ From a calibration perspective, it is useful to model these non-radial
+ distortions, or at least, detect and quantify these non-radial distortions
+ before deeming a lens suitable for use.
+\end_layout
+
+\begin_layout Standard
+In this work,
+\end_layout
+
+\begin_layout Enumerate
+We calibrate a lens-distortion model that uses local homographies to capture
+ lens-distortion.
+ This model extends previous work of the authors, which introduced the local
+ homography technique, to the calibration of lens-distortion in a zoom lens.
+\end_layout
+
+\begin_layout Enumerate
+We show that the lens model can implicitly capture both the radial and tangentia
+l components in the distortion, because it does not make any assumptions
+ about the form of the distortion.
+\end_layout
+
+\begin_layout Enumerate
+We show how the estimate of the lens distortion can be interpolated to intermedi
+ate zoom settings that were not used in the calibration phase.
+\end_layout
+
+\begin_layout Enumerate
+
+\color magenta
+Claim about evaluation and the result we concluded.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status collapsed
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename /var/tmp/capture/18.png
+	lyxscale 5
+	width 40col%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename /var/tmp/capture/35.png
+	lyxscale 5
+	width 40col%
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename /var/tmp/capture/70.png
+	lyxscale 5
+	width 40col%
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Distortion in a zoom lens.
+ A zoom-lens exhibits distortions of varying complexity over its zoom range.
+ It is common for a zoom lens have distortion that gradually changes its
+ form and magnitude over the zoom range.
+ In this example, we see how the distortion gradually changes from strong
+ barrel distortion, to very low distortion, and to strong pin-cushion distortion
+ as the lens is zoomed in.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Related Work
+\end_layout
+
+\begin_layout Standard
+Compared to the use of fixed focal length lenses, zoom lenses are seldom
+ mentioned in the research literature.
+ This is because zoom lenses offer no inherent advantage for most traditional
+ vision tasks.
+ However, they are indispensable in niche applications such as depth from
+ defocus and, as in our case, robotic surveillance.
+\end_layout
+
+\begin_layout Standard
+R.G.
+ Wilson's comprehensive work pioneers the standard method for zoom camera
+ calibration.
+ He calibrates the camera at known fixed settings and interpolates between
+ the parameters to obtain calibrations at intermediate settings.
+ Much of the later work in zoom camera calibration adapt this technique
+ to pan-tilt-zoom camera calibration 
+\color magenta
+[ref]
+\color inherit
+, or explore the use of different radial distortion models to capture lens
+ distortion across zoom levels 
+\color magenta
+[ref]
+\color inherit
+.
+\end_layout
+
+\begin_layout Standard
+Our work concentrates on zoom lenses in robotic surveillance applications.
+ As mentioned previously, lenses used on robots are subject to physical
+ shock and this introduces non-radial errors in the distortion.
+ The lens model proposed in this paper is flexible enough to capture both
+ the radial and non-radial components of lens distortion.
+ 
+\end_layout
+
+\begin_layout Section
+Background 
+\end_layout
+
+\begin_layout Standard
+Locally weighted homography based distortion estimation.
+\end_layout
+
+\begin_layout Section
+Method
+\end_layout
+
+\begin_layout Section
+Evaluation
+\end_layout
+
+\begin_layout Section
+Conclusion
+\end_layout
+
+\end_body
+\end_document
