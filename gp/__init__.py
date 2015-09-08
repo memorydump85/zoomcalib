@@ -119,6 +119,16 @@ class sqexp2D_covariancef(object):
 
 
 #--------------------------------------
+class sqexp3D_covariancef(object):
+#--------------------------------------
+    def __init__(self, theta):
+        self.theta = theta
+
+    def compute_gram_matrix(self, data):
+        return gram_matrix_sq_exp_3D(data, *self.theta)
+
+
+#--------------------------------------
 class linear_covariancef(object):
 #--------------------------------------
     def __init__(self, theta):

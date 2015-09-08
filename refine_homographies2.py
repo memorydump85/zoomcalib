@@ -39,8 +39,8 @@ class HomographyModel(object):
     @classmethod
     def load_from_file(class_, filename):
         # parse the filename to get intrinsic/extrinsic tags
-        etag, itag = filename.split('/')[-2:]
-        itag = itag.split('.')[0]
+        itag, etag = filename.split('/')[-2:]
+        etag = etag.split('.')[0]
 
         with open(filename) as f:
             hinfo = pickle.load(f)
@@ -224,8 +224,9 @@ def main():
     np.set_printoptions(precision=4, suppress=True)
 
     folder = sys.argv[1]
-    saved_files = iglob(folder + '/pose?/*.lh0')
+    saved_files = iglob(folder + '/*/*.lh0')
     hmodels = [ HomographyModel.load_from_file(f) for f in saved_files ]
+    print '%d hmodels\n' % len(hmodels)
 
     #
     # Deconstruct information in the HomographyModels into
@@ -233,48 +234,46 @@ def main():
     #
     graph = ConstraintGraph()
 
-    #
-    # Construct intrinsic nodes
-    #
     itag_getter = lambda e: e.itag
     hmodels.sort(key=itag_getter)
 
     for itag, group in groupby(hmodels, key=itag_getter):
+        group = list(group)
         homographies = [ hm.homography_at_center() for hm in group ]
+
         K = estimate_intrinsics_noskew(homographies)
-        graph.inodes[itag] = IntrinsicsNode(*matrix_to_intrinsics(K), tag=itag)
+        inode = IntrinsicsNode(*matrix_to_intrinsics(K), tag=itag)
 
-    #
-    # Construct extrinsic nodes
-    #
-    etag_getter = lambda e: e.etag
-    hmodels.sort(key=etag_getter)
+        # For each HomographyModel in `group` construct an ExtrinsicsNode
+        enode_tags = [ '%s/%s' % (itag, hm.etag) for hm in group ]
+        E_matrices = ( get_extrinsics_from_homography(H, K) for H in homographies )
+        enodes = [ ExtrinsicsNode(*matrix_to_xyzrph(E), tag=tag) for E, tag in zip(E_matrices, enode_tags) ]
 
-    for etag, group in groupby(hmodels, key=etag_getter):
-        estimates = []
-        for hm in group:
-            K = graph.inodes.get(hm.itag).to_matrix()[:,:3]
-            E = get_extrinsics_from_homography(hm.homography_at_center(), K)
-            estimates.append(matrix_to_xyzrph(E))
-        graph.enodes[etag] = ExtrinsicsNode(*np.mean(estimates, axis=0), tag=etag)
+        # Instantiate constraints between each ExtrinsicsNode and the single IntrinsicsNode
+        constraints = [ HomographyConstraint(hm, inode, enode) for hm, enode in zip(group, enodes) ]
+
+        # Leave out the worst two constraints
+        if False:
+            rmse = [ c.sq_unweighted_reprojection_errors().mean() for c in constraints ]
+            inliner_idx = np.argsort(rmse)[:-2]
+
+            enodes = [ enodes[i] for i in inliner_idx ]
+            constraints = [ constraints[i] for i in inliner_idx ]
+
+        # Add nodes and constraints to graph
+        graph.inodes[itag] = inode
+        graph.enodes.update( (e.tag, e) for e in enodes )
+        graph.constraints.extend( constraints )
 
     print 'Graph'
     print '-----'
     print '  %d intrinsic nodes' % len(graph.inodes)
     print '  %d extrinsic nodes' % len(graph.enodes)
+    print '  %d constraints' % len(graph.constraints)
     print ''
-
-    #
-    # Connect nodes by constraints
-    #
-    for hm in hmodels:
-        inode = graph.inodes[hm.itag]
-        enode = graph.enodes[hm.etag]
-        constraint = HomographyConstraint(hm, inode, enode)
-        graph.constraints.append(constraint)
-
+    for constraint in (c for c in graph.constraints if isinstance(c, HomographyConstraint)):
         rmse = np.sqrt(constraint.sq_unweighted_reprojection_errors().mean())
-        print '  %s %s rmse: %.2f' % (hm.etag, hm.itag, rmse)
+        print '  %s %s rmse: %.2f' % (constraint.enode.tag, constraint.inode.tag, rmse)
 
     #
     # Optimize graph to reduce error in constraints
@@ -287,7 +286,6 @@ def main():
         print ''
         for itag, inode in graph.inodes.iteritems():
             print '  intrinsics@ ' + itag + " =", np.array(inode.to_tuple())
-        print '  extrinsics@ pose0 =', np.array(graph.enodes['pose0'].to_tuple())
 
     def objective(x):
         graph.state = x
@@ -307,26 +305,8 @@ def main():
 
     print '\n'
     print '====================='
-    print '  Optimization 1'
+    print '  Optimization'
     print '====================='
-    print '    Optimizing all intrinsics and extrinisics'
-
-    optimize_graph()
-
-    #
-    # Now optimize with just the constraints of
-    # the poses required for estimating distortion
-    #
-    candidate_poses = set(sys.argv[2:])
-    candidate_constraints = ( c for c in graph.constraints if isinstance(c, HomographyConstraint) )
-    candidate_constraints = [ c for c in candidate_constraints if c.enode.tag in candidate_poses ]
-    graph.constraints = candidate_constraints
-
-    print '\n'
-    print '====================='
-    print '  Optimization 2'
-    print '====================='
-    print '    Optimizing candidate intrinsics (%d constraints)' % len(graph.constraints)
 
     optimize_graph()
 
@@ -338,8 +318,7 @@ def main():
         etag, itag = constraint.enode.tag, constraint.inode.tag
         K = constraint.inode.to_matrix()
         E = constraint.enode.to_matrix()
-        H = K.dot(E)
-        filename = '%s/%s/%s.lh0+' % (folder, etag, itag)
+        filename = '%s/%s.lh0+' % (folder, etag)
         with open(filename, 'w') as f:
             pickle.dump((K, E), f)
 
