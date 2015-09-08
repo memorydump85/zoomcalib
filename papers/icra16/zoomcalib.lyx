@@ -146,6 +146,55 @@ y radial: dominated by a component that is along the radius of the image
 \end_layout
 
 \begin_layout Standard
+\begin_inset Float figure
+placement !
+wide true
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename figures/radial_distortion.svg
+	lyxscale 50
+	width 95text%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Deficiencies in polynomial radial distortion models.
+ Three different zoom settings that exhibited high levels of distortion
+ were chosen and a camera model with radial polynomial distortion was calibrated
+ at each zoom setting.
+ In the first two plots, the degree-2 polynomial model produces biased results.
+ The degree-4 polynomial model has lower but noticeable bias.
+ The degree-5 polynomial has the lowest bias, but extrapolates badly in
+ areas with sparse data.
+ Thus, a different complexity of polynomial is appropriate at each zoom
+ setting.
+ Also, data in the first two plots exhibits correlations that group observations
+ at higher radii into two distinct modes.
+ This non-gaussian error profile suggests that some aspect of the underlying
+ distortion is not captured by a radial distortion model.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
 In this work,
 \end_layout
 
@@ -171,147 +220,6 @@ ate zoom settings that were not used in the calibration phase.
 
 \color magenta
 Claim about evaluation and the result we concluded.
-\end_layout
-
-\begin_layout Standard
-\begin_inset Float figure
-wide false
-sideways false
-status collapsed
-
-\begin_layout Plain Layout
-\align center
-\begin_inset Float figure
-wide false
-sideways false
-status open
-
-\begin_layout Plain Layout
-\begin_inset Graphics
-	filename /var/tmp/capture/18.png
-	lyxscale 5
-	width 40col%
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Plain Layout
-\begin_inset Caption
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Plain Layout
-\align center
-\begin_inset Float figure
-wide false
-sideways false
-status open
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\begin_layout Plain Layout
-\begin_inset Graphics
-	filename /var/tmp/capture/35.png
-	lyxscale 5
-	width 40col%
-
-\end_inset
-
-
-\begin_inset Caption
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
-\begin_inset Float figure
-wide false
-sideways false
-status open
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\begin_layout Plain Layout
-\begin_inset Graphics
-	filename /var/tmp/capture/70.png
-	lyxscale 5
-	width 40col%
-
-\end_inset
-
-
-\begin_inset Caption
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
-\begin_inset Caption
-
-\begin_layout Plain Layout
-Distortion in a zoom lens.
- A zoom-lens exhibits distortions of varying complexity over its zoom range.
- It is common for a zoom lens have distortion that gradually changes its
- form and magnitude over the zoom range.
- In this example, we see how the distortion gradually changes from strong
- barrel distortion, to very low distortion, and to strong pin-cushion distortion
- as the lens is zoomed in.
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-
-
 \end_layout
 
 \begin_layout Section
@@ -356,11 +264,327 @@ Our work concentrates on zoom lenses in robotic surveillance applications.
 \end_layout
 
 \begin_layout Section
-Background 
+Background
+\end_layout
+
+\begin_layout Subsection
+Homography estimation
 \end_layout
 
 \begin_layout Standard
-Locally weighted homography based distortion estimation.
+A planar perspective homography is an invertible linear transformation that
+ maps a point 
+\begin_inset Formula $\mathbf{p}$
+\end_inset
+
+ on one perspective plane onto a point 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+ in another perspective plane.
+ If 
+\series bold
+
+\begin_inset Formula $\mathbf{H}$
+\end_inset
+
+
+\series default
+ is the homography that maps 
+\begin_inset Formula $\mathbf{p}$
+\end_inset
+
+ to 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+, we write: 
+\begin_inset Formula 
+\[
+\mathbf{q}\sim\mathbf{H}\mathbf{p}
+\]
+
+\end_inset
+
+The point 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+ is similar and not equal to 
+\begin_inset Formula $\mathbf{Hp}$
+\end_inset
+
+ because of the universal scale ambiguity in perspective projection.
+\end_layout
+
+\begin_layout Standard
+In general 
+\begin_inset Formula $\mathbf{H}$
+\end_inset
+
+ is a 
+\begin_inset Formula $4\times4$
+\end_inset
+
+ matrix that operates on normalized coordinates.
+ However, for the purposes of camera calibration, without loss of generality
+ we assume we assume that 
+\begin_inset Formula $z=0$
+\end_inset
+
+ on the calibration target.
+ Hence, for camera calibration, the third row of the homography matrix is
+ effectively zero and we use a 
+\begin_inset Formula $3\times4$
+\end_inset
+
+ homography matrix:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+H=\left[\begin{array}{cccc}
+h_{11} & h_{12} & h_{13} & h_{14}\\
+h_{21} & h_{22} & h_{23} & h_{24}\\
+h_{31} & h_{32} & h_{33} & h_{34}
+\end{array}\right]
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+In the camera calibration problem, we are interested in a homography that
+ maps world points to image points.
+ We start by aquiring an image of a known calibration pattern.
+ This gives us correspondences between the pattern in world coordinates
+ (
+\begin_inset Formula $z=0$
+\end_inset
+
+ as explained above) and image points in pixel coordinates.
+ Each obtained correspondence produces two constraints on the elements of
+ H as explained in [D.
+ Kreigman].
+ With multiple correspondences, an estimate of H that satisfies all the
+ constraints in a least-squares sense is obtained by solving the over-constraine
+d system
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\mathbf{Ah}=\mathbf{0},\label{eq:homography-regression}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\mathbf{h}=\left[h_{11},h_{12},\cdots,h_{34}\right]^{\mathbf{\top}}$
+\end_inset
+
+, and 
+\begin_inset Formula $\mathbf{A}$
+\end_inset
+
+ is the matrix obtained by stacking the constraints obtained from correspondence
+s.
+\end_layout
+
+\begin_layout Subsection
+Locally weighted homography
+\end_layout
+
+\begin_layout Standard
+Consider the plot in [Fig.
+ 3].
+ The data points in this figure are a typical candidate for non-linear regressio
+n.
+ However, in a sufficiently small window (shaded gray) a linear model, shown
+ by a red line, provides a good fit.
+ Note, for example, that at a different window location, shown by the other
+ group of red points, we obtain another, locally valid, linear model.
+\end_layout
+
+\begin_layout Standard
+By systematically sliding this small window 
+\begin_inset Formula $w$
+\end_inset
+
+ over the entire data set, we can compute local linear estimates at each
+ window location to get the non-linear regressor shown in blue.
+\end_layout
+
+\begin_layout Standard
+To enforce smoothness on the resulting non-linear regressor, it is typical
+ to weight the regression problem such that points near the prediction location
+ are weighted higher than those further away.
+ This technique is called 
+\emph on
+locally-weighted linear regression
+\emph default
+
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+This process is similar to the computation of a convolution or a moving
+ average.
+\end_layout
+
+\end_inset
+
+[ref].
+\end_layout
+
+\begin_layout Standard
+This idea of using locally linear models can also be extended to the problem
+ of homography estimation.
+ This is done by considering the weighted version of the regression (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:homography-regression"
+
+\end_inset
+
+) used in homography esimtation:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\mathbf{\left(A^{\mathbf{\top}}WA\right)h}=\mathbf{0}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+where 
+\series bold
+W
+\series default
+ is a diagonal matrix of weights given by the weighting function:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+w(\mathbf{q},\mathbf{x}_{i})=\nu^{2}\exp\left\{ -\frac{{\|\mathbf{q}-\mathbf{x}_{i}\|^{2}}}{2\tau^{2}}\right\} +\lambda^{2},
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+where 
+\begin_inset Formula $\mathbf{x}_{i}$
+\end_inset
+
+are the data points on the source plane and 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+ is the query location on the source plane where a local homography is being
+ estimated.
+ The function is constructed such that the 
+\begin_inset Formula $\mathbf{x}_{i}$
+\end_inset
+
+ closer to the query point 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+ are weighted higher than the 
+\begin_inset Formula $\mathbf{x}_{i}$
+\end_inset
+
+ that are far away.
+ The parameter 
+\begin_inset Formula $\tau$
+\end_inset
+
+ controls the spatial extent of the weighting function; 
+\begin_inset Formula $\nu$
+\end_inset
+
+ and 
+\begin_inset Formula $\lambda$
+\end_inset
+
+ control the magnitude of the weights, thereby acting as regularization
+ parameters for the regression problem.
+\end_layout
+
+\begin_layout Standard
+When the weighting parameters 
+\begin_inset Formula $\nu$
+\end_inset
+
+, 
+\begin_inset Formula $\tau$
+\end_inset
+
+ and 
+\begin_inset Formula $\lambda$
+\end_inset
+
+ are set to their optimal values, the locally weighted homographies computed
+ over the domain of the planar target can map straight lines on the calibration
+ target onto curves in its image, as shown in Fig.
+\begin_inset space \thinspace{}
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:lines-to-curves"
+
+\end_inset
+
+.
+ This is in contrast to a conventional planar homography that can only map
+ straight lines onto straight lines.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:lines-to-curves"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Section
