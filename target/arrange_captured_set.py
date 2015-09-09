@@ -42,7 +42,7 @@ def main():
         for i, (filename, _) in enumerate(file_group):
             command = [ "convert", filename, folder+'/'+subfolder+'/pose'+str(i)+'.png' ]
             print ' '.join(command)
-            Popen(command)
+            check_call(command)
 
 
 if __name__ == '__main__':
