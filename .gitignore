@@ -3,7 +3,6 @@
 *.pnm
 *.jpeg
 *.jpg
-*.png
 *.sublime-workspace
 .tags
 .tags_sorted_by_file
@@ -11,3 +10,4 @@
 *.so
 *.npy
 *.pyxbldc
+TODO
