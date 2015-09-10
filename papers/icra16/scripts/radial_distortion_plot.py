@@ -60,7 +60,7 @@ def main():
     import sys
 
     from matplotlib import pyplot as plt
-    plt.figure(figsize=(3,4))
+    plt.figure(figsize=(4,9))
 
     for num, filename in enumerate(sys.argv[1:]):
         calibration = CameraCalibration.load_from_file(filename)
@@ -82,20 +82,25 @@ def main():
         #
         # Visualization
         #
-        plt.subplot(1,3,num+1)
+        ax = plt.subplot(3, 1, num+1)
         plt.plot(r, d, 'ko', markersize=1.5, alpha=0.9)
 
-        plt.plot(*polyfit(2), linestyle='-', color='#7570b3', alpha=1, linewidth=1, label='degree 2')
-        plt.plot(*polyfit(4), linestyle='-', color='#d95f02', alpha=1, linewidth=1, label='degree 4')
-        plt.plot(*polyfit(5), linestyle='-', color='#1b9e77', alpha=1, linewidth=1, label='degree 5')
+        plt.plot(*polyfit(2), linestyle='-', color='#7570b3', alpha=0.8, linewidth=2, label='degree 2')
+        plt.plot(*polyfit(4), linestyle='-', color='#d95f02', alpha=0.8, linewidth=2, label='degree 4')
+        plt.plot(*polyfit(5), linestyle='-', color='#1b9e77', alpha=0.8, linewidth=2, label='degree 5')
         plt.xticks([0, 400, 800, 1200, 1600])
-        plt.xlabel('radius (pixels)')
-        plt.ylabel('distortion (pixels)')
         plt.gca().set_ylim([0, 120])
         plt.gca().set_xlim([0, 2000])
+        if num == 2:
+            plt.xlabel('radius (pixels)')
+        if num == 1:
+            plt.ylabel('distortion (pixels)')
+        if num != 2:
+            plt.setp( ax.get_xticklabels(), visible=False)
         plt.legend(loc='upper left', fontsize=10)
         plt.grid()
 
+    plt.tight_layout()
     plt.show()
 
 if __name__ == '__main__':

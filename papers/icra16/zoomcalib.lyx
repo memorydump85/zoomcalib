@@ -20,7 +20,7 @@
 \font_tt_scale 100
 
 \graphics default
-\default_output_format default
+\default_output_format pdf2
 \output_sync 0
 \bibtex_command default
 \index_command default
@@ -71,30 +71,27 @@ Pradeep Ranganathan and Edwin Olson
 \end_layout
 
 \begin_layout Abstract
-An accurate calibration of a zoom camera should capture the variation in
- both the intrinsic and lens-distortion parameters across the zoom range
- of the lens.
+In a zoom camera, the intrinsic parameters and lens-distortion vary continuously
+ across its zoom range.
+ In particular, the complexity of lens-distortion does not remain constant
+ across zoom levels.
+ Using a constant complexity polynomial to model this distortion leads to
+ biased results.
 \end_layout
 
 \begin_layout Abstract
-In a zoom lens, the complexity of lens distortion does not remain constant
- throughout the zoom range.
- Consequently, using a fixed degree polynomial to model lens-distortion
- can lead to biased results.
-\end_layout
-
-\begin_layout Abstract
-Furthermore, misaligned optical components in the lens can produce distortions
- that cannot be captured completely with only a radial distortion model.
+Furthermore, the radial symmetry assumption for lens-distortion is often
+ violated in a zoom lens because the optical components of zoom lenses are
+ prone to misalignment.
  It is important to capture, or at least detect the presence of, these non-radia
 l distortions.
 \end_layout
 
 \begin_layout Abstract
-In this work, we model the distortion in a zoom lens using a non-parametric
- local homography technique.
- Our evaluation shows that our method is accurate and flexible enough to
- capture the distortion in a zoom lens.
+In this work, we characterize the distortion in a zoom lens using a non-parametr
+ic locally-weighted homography model.
+ Our evaluation shows that our method produces an accurate and flexible
+ model of the distortion in a zoom lens.
 \end_layout
 
 \begin_layout Section
@@ -103,54 +100,69 @@ Introduction
 
 \begin_layout Standard
 Zoom lenses are widely used in modern surveillance systems because they
- allow the user to switch between observing a wide field of view and zooming-in
- to see an object to see it in detail.
+ allow the user to quickly switch between surveying an entire scene and
+ examining an object in detail.
  In the case of robotic surveillance, it is faster to zoom-in than to travel
  closer to the object while tracking or inspecting an object.
- Cameras fitted with a zoom lens are a standard component in aerial vehicles
- used for surveillance and photography.
+ Zoom cameras are a standard component in both military drones used for
+ surveillance and commercially available aerial vehicle used for photography.
 \end_layout
 
 \begin_layout Standard
-The availability of an accurate calibration for a zoom lens enables good
- photogrammetric registration of video frames, while continuously zooming
- in and out.
- This registration aids in the ability to continuously track an object while
- zooming, or create accurate panoramas from a sequence of aerial photographs.
+Video from a zoom camera is often acquired while continuously zooming in
+ and out.
+ The availability of an accurate calibration for a zoom lens enables good
+ photogrammetric registration of these video frames.
+ A good photogrammetric registration in turn increases the accuracy of tracking
+ while zooming, or image registration for stitching panoramas.
 \end_layout
 
 \begin_layout Standard
-The straightforward approach to calibrate a zoom lens is to perform a series
- of fixed camera calibrations at a fixed set of zoom values and then define
- a method to interpolate between the intrinsic and lens parameters at intermedia
-te zoom values.
- But this standard interpolation approach forces a low-degree polynomial
- model assumption for modeling lens distortion.
- This low-degree polynomial assumption might not hold for the varying distortion
- exhibited by the zoom lens across its zoom range.
+A straightforward extension of classic camera calibration to zoom camera
+ calibration is possible by simply calibrating a different model at different
+ zoom levels.
+ One then interpolates the camera parameters to intermediate zoom levels.
+ The problem with this approach arises from the fact that classic camera
+ calibration assumes a fixed complexity polynomial model, while the complexity
+ of distortion in a zoom lens varies across its zoom levels.
 \end_layout
 
 \begin_layout Standard
 A more pressing issue is the presence of non-radial distortion in zoom lenses.
- By nature of their construction, lenses exhibit distortion that is predominantl
-y radial: dominated by a component that is along the radius of the image
- and symmetric about the optical center.
+ The distortion of most conventional lenses is predominantly radial: dominated
+ by a component that is along the radius of the image and symmetric about
+ the optical center.
  Hence, it is common to assume a radial model for lens-distortion.
  However, zoom lenses have multiple optical elements and any misalignment
  in these elements manifests in distortions that are orthogonal to the radial
  component.
  This is a real concern with lenses used in robotic applications because
- they are often subject to physical shock that can cause changes in the
- alignment of lens elements.
- From a calibration perspective, it is useful to model these non-radial
- distortions, or at least, detect and quantify these non-radial distortions
- before deeming a lens suitable for use.
+ they are often subject to physical shock.
+\end_layout
+
+\begin_layout Standard
+From a calibration perspective, it is useful to model these non-radial distortio
+ns, or at least, detect and quantify these non-radial distortions before
+ deeming a lens suitable for use.
+ Fig.
+\begin_inset space \thinspace{}
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:radial-model-problems"
+
+\end_inset
+
+, above, delineates the typical deficiencies of radial polynomial distortion
+ models, when used to model the distortion of zoom lenses.
 \end_layout
 
 \begin_layout Standard
 \begin_inset Float figure
 placement !
-wide true
+wide false
 sideways false
 status open
 
@@ -159,7 +171,7 @@ status open
 \begin_inset Graphics
 	filename figures/radial_distortion.svg
 	lyxscale 50
-	width 95text%
+	width 95col%
 
 \end_inset
 
@@ -170,20 +182,32 @@ status open
 \begin_inset Caption
 
 \begin_layout Plain Layout
-Deficiencies in polynomial radial distortion models.
- Three different zoom settings that exhibited high levels of distortion
- were chosen and a camera model with radial polynomial distortion was calibrated
- at each zoom setting.
+Deficiencies in radial polynomial distortion models.
+ The distortion data is from a Nikon 18-200
+\begin_inset space \thinspace{}
+\end_inset
+
+mm auto-focus zoom lens.
+ Three different zoom levels that exhibited high distortion were chosen
+ and a camera model with radial polynomial distortion was calibrated at
+ each zoom level.
  In the first two plots, the degree-2 polynomial model produces biased results.
  The degree-4 polynomial model has lower but noticeable bias.
  The degree-5 polynomial has the lowest bias, but extrapolates badly in
  areas with sparse data.
  Thus, a different complexity of polynomial is appropriate at each zoom
- setting.
+ level.
  Also, data in the first two plots exhibits correlations that group observations
  at higher radii into two distinct modes.
  This non-gaussian error profile suggests that some aspect of the underlying
  distortion is not captured by a radial distortion model.
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:radial-model-problems"
+
+\end_inset
+
+
 \end_layout
 
 \end_inset
@@ -197,35 +221,40 @@ Deficiencies in polynomial radial distortion models.
 \end_layout
 
 \begin_layout Standard
-In this work,
+In this work, we pursue a flexible model of lens-distortion that is capable
+ of capturing the distortion in a zoom lens.
+ Our contributions are:
 \end_layout
 
 \begin_layout Enumerate
-We calibrate a lens-distortion model that uses local homographies to capture
- lens-distortion.
- This model extends previous work of the authors 
+We characterize the distortion in a zoom lens using a non-parametric locally-wei
+ghted homography model.
+ This model extends our previous work, 
 \color magenta
-[ref]
+[?]
 \color inherit
-, which introduced the local homography technique, to the calibration of
- lens-distortion in a zoom lens.
+, to the calibration of lens-distortion in a zoom lens.
 \end_layout
 
 \begin_layout Enumerate
-We show that the lens model can implicitly capture both the radial and tangentia
-l components in the distortion, because it does not make any assumptions
- about the form of the distortion.
+We extend our previous work by refining local homography estimates using
+ non-linear optimization.
+ This improves the pixel accuracy of the local homography estimates.
 \end_layout
 
 \begin_layout Enumerate
-We show how the estimate of the lens distortion can be interpolated to intermedi
-ate zoom settings that were not used in the calibration phase.
+We capture a non-parametric model of lens-distortion on a Nikon 18-200
+\begin_inset space \thinspace{}
+\end_inset
+
+mm auto-focus zoom lens, at fixed set of zoom levels, and show how one can
+ interpolate distortion to intermediate zoom levels.
 \end_layout
 
 \begin_layout Enumerate
-
-\color magenta
-Claim about evaluation and the result we concluded.
+We present our evaluation of the model and show that it captures an accurate
+ model of lens-distortion, without explicitly making assumptions about its
+ form or symmetry.
 \end_layout
 
 \begin_layout Section
@@ -238,34 +267,50 @@ Compared to the use of fixed focal length lenses, zoom lenses are seldom
  This is because zoom lenses offer no inherent advantage for most traditional
  vision tasks.
  However, they are indispensable in niche applications such as depth from
- defocus and, as in our case, robotic surveillance.
+ defocus and, as in our case, surveillance.
 \end_layout
 
 \begin_layout Standard
-R.G.
- Wilson's comprehensive work pioneers the standard method for zoom camera
- calibration.
- He calibrates the camera at known fixed settings and interpolates between
- the parameters to obtain calibrations at intermediate settings.
- Much of the later work in zoom camera calibration adapt this technique
- to pan-tilt-zoom camera calibration 
+The straightforward approach of calibrating a zoom camera at a few fixed
+ settings and then using interpolation to predict camera parameters at intermedi
+ate settings is first mentioned and evaluates in by Wilson in 
 \color magenta
-[ref]
-\color inherit
-, or explore the use of different radial distortion models to capture lens
- distortion across zoom levels 
-\color magenta
-[ref]
+[?]
 \color inherit
 .
+ Later work in zoom camera calibration adapts this technique to pan-tilt-zoom
+ camera calibration 
+\color magenta
+[?]
+\color inherit
+, or explores the use of different radial distortion models to capture lens
+ distortion across zoom levels 
+\color magenta
+[?]
+\color inherit
+.
+\begin_inset Marginal
+status open
+
+\begin_layout Plain Layout
+
+\size footnotesize
+\color red
+needs more work
+\end_layout
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
-Our work concentrates on zoom lenses in robotic surveillance applications.
+Our work is motivated primarily by the requirements of a calibration procedure
+ for zoom lenses used on a robot.
  As mentioned previously, lenses used on robots are subject to physical
- shock and this introduces non-radial errors in the distortion.
- The lens model proposed in this paper is flexible enough to capture both
- the radial and non-radial components of lens distortion.
+ shock, which introduces non-radial distortion.
+ The model for zoom-lens distortion proposed in this paper is flexible enough
+ to capture both the radial and non-radial components of lens distortion.
  
 \end_layout
 
@@ -321,41 +366,50 @@ The point
 \end_inset
 
  because of the universal scale ambiguity in perspective projection.
-\end_layout
+ If 
+\begin_inset Formula $\mathbf{p}$
+\end_inset
 
-\begin_layout Standard
-In general 
+ and 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+ are points in 3-D homogeneous space, 
 \begin_inset Formula $\mathbf{H}$
 \end_inset
 
  is a 
-\begin_inset Formula $4\times4$
+\begin_inset Formula $3\times3$
 \end_inset
 
- matrix that operates on normalized coordinates.
- However, for the purposes of camera calibration, without loss of generality
- we assume we assume that 
-\begin_inset Formula $z=0$
+ matrix that transforms 
+\begin_inset Formula $\mathbf{p}$
 \end_inset
 
- on the calibration target.
- Hence, for camera calibration, the third row of the homography matrix is
- effectively zero and we use a 
-\begin_inset Formula $3\times4$
+ into 
+\begin_inset Formula $\mathbf{q}$
 \end_inset
 
- homography matrix:
+:
 \end_layout
 
 \begin_layout Standard
 \begin_inset Formula 
-\[
-H=\left[\begin{array}{cccc}
-h_{11} & h_{12} & h_{13} & h_{14}\\
-h_{21} & h_{22} & h_{23} & h_{24}\\
-h_{31} & h_{32} & h_{33} & h_{34}
-\end{array}\right]
-\]
+\begin{equation}
+\left[\begin{array}{c}
+x_{q}\\
+y_{q}\\
+z_{q}
+\end{array}\right]\sim\left[\begin{array}{ccc}
+h_{11} & h_{12} & h_{13}\\
+h_{21} & h_{22} & h_{23}\\
+h_{31} & h_{32} & h_{33}
+\end{array}\right]\left[\begin{array}{c}
+x_{p}\\
+y_{p}\\
+z_{p}
+\end{array}\right]\label{eq:homography-transform}
+\end{equation}
 
 \end_inset
 
@@ -363,21 +417,154 @@ h_{31} & h_{32} & h_{33} & h_{34}
 \end_layout
 
 \begin_layout Standard
-In the camera calibration problem, we are interested in a homography that
- maps world points to image points.
- We start by aquiring an image of a known calibration pattern.
- This gives us correspondences between the pattern in world coordinates
- (
-\begin_inset Formula $z=0$
+If we have a few different observations of 
+\begin_inset Formula $\mathbf{p}$
 \end_inset
 
- as explained above) and image points in pixel coordinates.
- Each obtained correspondence produces two constraints on the elements of
- H as explained in [D.
- Kreigman].
- With multiple correspondences, an estimate of H that satisfies all the
- constraints in a least-squares sense is obtained by solving the over-constraine
-d system
+ and corresponding 
+\begin_inset Formula $\mathbf{q}$
+\end_inset
+
+, we can estimate 
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+
+\begin_inset Formula $\mathbf{H}$
+\end_inset
+
+
+\family default
+\series default
+\shape default
+\size default
+\emph default
+\bar default
+\strikeout default
+\uuline default
+\uwave default
+\noun default
+\color inherit
+ from the correspondences, by solving a least-squares problem.
+ This method is called the 
+\emph on
+direct linear transform
+\emph default
+ method; this explanation of the method is adapted from 
+\color magenta
+[?]
+\color inherit
+.
+ Let 
+\begin_inset Formula $\left(x_{q},y_{q},z_{q}\right)\rightleftharpoons\left(x_{p},y_{p},z_{p}\right)$
+\end_inset
+
+ be a pair of corresponding points.
+ In normalized homogeneous coordinates, 
+\begin_inset Formula $\left(x'_{q},y'_{q}\right)=\left(x_{q}/z_{q},y_{q}/z_{q}\right)$
+\end_inset
+
+.
+ Then, (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:homography-transform"
+
+\end_inset
+
+) becomes:
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+
+\begin_inset Formula 
+\begin{equation}
+\left[\begin{array}{c}
+x'_{q}\\
+y'_{q}\\
+1
+\end{array}\right]\sim\left[\begin{array}{ccc}
+h_{11} & h_{12} & h_{13}\\
+h_{21} & h_{22} & h_{23}\\
+h_{31} & h_{32} & h_{33}
+\end{array}\right]\left[\begin{array}{c}
+x_{p}\\
+y_{p}\\
+z_{p}
+\end{array}\right]\label{eq:homography-transform2}
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Without loss of generality we can also assume that the source plane is the
+ x-y plane, giving us 
+\begin_inset Formula $z_{p}=0$
+\end_inset
+
+.
+ Now, expanding (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:homography-transform2"
+
+\end_inset
+
+) gives us two linear constraints in 
+\begin_inset Formula $\mathbf{h}=\left[h_{11},h_{12},\cdots,h_{33}\right]^{\mathbf{\top}}$
+\end_inset
+
+.
+ When we have multiple correspondences, we get two constraints from each
+ correspondence.
+ We then solve for 
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+
+\begin_inset Formula $\mathbf{h}$
+\end_inset
+
+
+\family default
+\series default
+\shape default
+\size default
+\emph default
+\bar default
+\strikeout default
+\uuline default
+\uwave default
+\noun default
+\color inherit
+ by solving the over-determined system:
 \end_layout
 
 \begin_layout Standard
@@ -389,15 +576,11 @@ d system
 \end_inset
 
 where 
-\begin_inset Formula $\mathbf{h}=\left[h_{11},h_{12},\cdots,h_{34}\right]^{\mathbf{\top}}$
-\end_inset
-
-, and 
 \begin_inset Formula $\mathbf{A}$
 \end_inset
 
- is the matrix obtained by stacking the constraints obtained from correspondence
-s.
+ is the coefficient matrix obtained by stacking the constraints from each
+ correspondence.
 \end_layout
 
 \begin_layout Subsection
@@ -406,9 +589,10 @@ Locally weighted homography
 
 \begin_layout Standard
 \begin_inset Float figure
+placement bh
 wide false
 sideways false
-status open
+status collapsed
 
 \begin_layout Plain Layout
 \align center
@@ -459,23 +643,27 @@ reference "fig:local-regression"
 
 .
  The data in this figure is a typical candidate for non-linear regression.
- However, in a sufficiently small window (shaded gray) a linear model, shown
- by a red line, provides a good fit.
- Note, for example, that at a different window location, shown by the other
- group of red points, we obtain another, locally valid, linear model.
+ However, in a sufficiently small window (shaded gray) a linear model, provides
+ a good fit as shown by the red line.
 \end_layout
 
 \begin_layout Standard
 By systematically sliding this small window 
-\begin_inset Formula $w$
-\end_inset
-
+\size small
+\emph on
+W
+\size default
+\emph default
  over the entire data set, we can compute local linear estimates at each
- window location to get the non-linear regressor shown in blue.
+ window location.
+ For example, we get a another, locally-valid, linear model for a different
+ window position at the other set of red points.
+ Combining the prediction of these local linear models gives us the non-linear
+ regressor shown in blue.
 \end_layout
 
 \begin_layout Standard
-To enforce smoothness on the resulting non-linear regressor, it is typical
+To enforce smoothness in the resulting non-linear regressor, it is typical
  to weight the regression problem such that points near the prediction location
  are weighted higher than those further away.
  This technique is called 
@@ -493,26 +681,40 @@ This process is similar to the computation of a convolution or a moving
 
 \end_inset
 
-[ref].
+, and was first described by Cleveland in
+\color magenta
+ [?]
+\color inherit
+.
+ Locally-weighted regression is a non-parametric technique that automatically
+ adapts to the amount of non-linearity present in the data being modeled.
+ It has 
+\emph on
+hyper-parameters
+\emph default
+ that correspond to the parameters of the weighting function, but the total
+ number of hyper-parameters remain the same for any amount of non-linearity
+ in the data.
 \end_layout
 
 \begin_layout Standard
-This idea of using locally linear models can also be extended to the problem
- of homography estimation.
- This is done by considering the weighted version of the regression (
+This idea of locally linear models can be extended to the problem of homography
+ estimation, by considering the weighted version of the regression problem
+ (
 \begin_inset CommandInset ref
 LatexCommand ref
 reference "eq:homography-regression"
 
 \end_inset
 
-) used in homography esimtation:
+).
+ This gives us:
 \end_layout
 
 \begin_layout Standard
 \begin_inset Formula 
 \[
-\mathbf{\left(A^{\mathbf{\top}}WA\right)h}=\mathbf{0}
+\mathbf{\left(A^{\mathbf{\top}}WA\right)h}=\mathbf{0,}
 \]
 
 \end_inset
@@ -525,7 +727,9 @@ where
 \series bold
 W
 \series default
- is a diagonal matrix of weights given by the weighting function:
+ is a diagonal matrix of weights.
+ The weights themselves are computed using the squared exponential weighting
+ function:
 \end_layout
 
 \begin_layout Standard
@@ -550,7 +754,7 @@ are the data points on the source plane and
 
  is the query location on the source plane where a local homography is being
  estimated.
- The function is constructed such that the 
+ The weighting function is such that the 
 \begin_inset Formula $\mathbf{x}_{i}$
 \end_inset
 
@@ -567,7 +771,14 @@ are the data points on the source plane and
 \begin_inset Formula $\tau$
 \end_inset
 
- controls the spatial extent of the weighting function; 
+ controls the spatial extent of the weighting function: larger values of
+ 
+\begin_inset Formula $\tau$
+\end_inset
+
+ correspond to computing local estimates over larger neighborhoods, thereby
+ producing smoother regressors.
+ The parameters 
 \begin_inset Formula $\nu$
 \end_inset
 
@@ -615,7 +826,7 @@ reference "fig:lines-to-curves"
 placement h
 wide false
 sideways false
-status open
+status collapsed
 
 \begin_layout Plain Layout
 \align center
@@ -678,23 +889,37 @@ name "fig:lines-to-curves"
 
 \begin_layout Subsection
 Lens distortion estimation
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Lens-distortion-estimation"
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
-Instead of the traditional model-based definition of lens-distortion, we
- can define lens-distortion in a model-free manner by defining it as the
- deviation from a homography.
- Consider the local homography at the center of the image: if there was
- no distortion, this homography should accurately match world-image corresponden
-ces everywhere on the image.
- Thus, the deviation from this homography at the center gives us an estimate
- of lens-distortion.
- The steps used in distortion estimation using this alternative definition
- are as follows:
-\end_layout
+Consider the local homography at the center of the image 
+\begin_inset Formula $\mathbf{c}_{0}$
+\end_inset
 
-\begin_layout Enumerate
-Obtain a set of correspondences between world points 
+.
+ Because of distortion in the image, this is homography is accurate only
+ near a small region near 
+\begin_inset Formula $\mathbf{c}_{0}$
+\end_inset
+
+.
+ If there was no distortion, this homography would accurately match world-image
+ correspondences everywhere on the image.
+ This observation leads us to an alternative definition of distortion in
+ image: distortion is the deviation from the homography at the center of
+ the image 
+\begin_inset Formula $\mathbf{c}_{0}$
+\end_inset
+
+.
+ Given a set of correspondences between world points 
 \begin_inset Formula $\mathbf{x}$
 \end_inset
 
@@ -702,7 +927,7 @@ Obtain a set of correspondences between world points
 \begin_inset Formula $\mathbf{u}$
 \end_inset
 
-.
+, we estimate lens-distortion as follows:
 \end_layout
 
 \begin_layout Enumerate
@@ -723,7 +948,7 @@ Project the world points
 \begin_inset Formula $\mathbf{H}_{0}$
 \end_inset
 
-to obtain the points 
+ to obtain the points 
 \begin_inset Formula $\mathbf{u}'$
 \end_inset
 
@@ -743,10 +968,42 @@ The distortion estimate at the image points
 \end_layout
 
 \begin_layout Standard
-This lens distortion estimation technique provides a method to model any
- source of smooth distortion in an image, without making assumptions about
- radial symmetry.
- See Fig.
+This alternative definition of distortion provides a very flexible way of
+ modeling lens-distortion, without making assumptions about symmetry or
+ parametric form.
+ The above mentioned set of steps provide us with distortion observations
+ at the image points 
+\begin_inset Formula $\mathbf{u}$
+\end_inset
+
+, where we have correspondences.
+ To predict the distortion at any other point, we use interpolation.
+\end_layout
+
+\begin_layout Standard
+Generally, we are expect the distortion in lenses to be smooth.
+ To produce smooth interpolation estimates of the distortion observations,
+ we use a Gaussian Process model with a 2-D squared-exponential covariance
+ function:
+\begin_inset Formula 
+\[
+k(\mathbf{x}_{m},\mathbf{x}_{n})=\sigma_{f}^{2}\exp\left\{ -\frac{1}{2}\mathbf{x}_{m}^{\top}\Sigma^{-1}\mathbf{x}_{n}\right\} +\delta_{mn}\beta^{-1}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We refer the reader to our previous work 
+\color magenta
+[?]
+\color inherit
+ for more details about smoothly interpolating distortion using a 2-D Gaussian
+ Process.
+ This lens distortion estimation technique provides a method to model arbitrary
+ sources of smooth distortion in an image, as shown in Fig.
 \begin_inset space \thinspace{}
 \end_inset
 
@@ -757,7 +1014,7 @@ reference "fig:clam-undistorted"
 
 \end_inset
 
- for an example of this technique in action.
+.
 \end_layout
 
 \begin_layout Standard
@@ -784,7 +1041,7 @@ status open
 \begin_layout Plain Layout
 Removing distortion in an arbitrary imaging setup.
  The distortion estimation method used in this work can non-parametrically
- estimate and correct distortions such as the distortion in this setup involving
+ estimate and correct distortions such as the distortion in this setup with
  a camera pointed at a convex mirror.
 \begin_inset CommandInset label
 LatexCommand label
@@ -818,12 +1075,13 @@ Calibration data
 \end_layout
 
 \begin_layout Standard
-First, we choose a set of zoom settings to perform calibration.
- At each zoom setting, atleast eight images of a planar calibration target
- are taken.
- Each image set contains images in general position: no two images correspond
- to a pure translation or rotation of the target.
- World-image correspondences are extracted for each of these zoom settings.
+We start by gathering world-image correspondences using a planar calibration
+ target.
+ We choose a set of zoom levels and acquire at least eight images of the
+ target at each zoom level.
+ To avoid redundant images we ensure that each image in the set of images
+ for a single zoom level does not contain related by a pure translation
+ or pure rotation of the target.
 \end_layout
 
 \begin_layout Subsection
@@ -832,7 +1090,7 @@ Estimating the local homography at the center
 
 \begin_layout Standard
 Next, we estimate the locally-weighted homography at the center of each
- image by using the squared exponential weighting function (
+ image by using the squared-exponential weighting function (
 \begin_inset CommandInset ref
 LatexCommand ref
 reference "eq:wfunc"
@@ -856,19 +1114,49 @@ reference "eq:wfunc"
 \end_layout
 
 \begin_layout Enumerate
-Choose nine correspondences closest to the center of the image.
+We choose nine correspondences closest to the center of the image.
 \end_layout
 
 \begin_layout Enumerate
-Make training and validation folds of this data by leaving out one correspondenc
-e in each fold.
- This gives us nine data folds.
- Each correspondence is used for validation in one of the folds.
+We construct nine validation folds of this data by leaving out one correspondenc
+e at a time.
+ Thus each correspondence is the validation correspondence in one of the
+ folds.
 \end_layout
 
 \begin_layout Enumerate
-Find the locally weighted homography with weighting function parameters
- 
+For a given 
+\begin_inset Formula $\tau$
+\end_inset
+
+, 
+\begin_inset Formula $\nu$
+\end_inset
+
+ and 
+\begin_inset Formula $\lambda$
+\end_inset
+
+ we construct locally-weighted homographies for each fold and compute the
+ prediction error on the validation sample for that fold.
+ The average prediction error across folds gives us the error for the given
+ values of 
+\begin_inset Formula $\tau$
+\end_inset
+
+, 
+\begin_inset Formula $\nu$
+\end_inset
+
+ and 
+\begin_inset Formula $\lambda$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Enumerate
+We find the optimal values 
 \begin_inset Formula $\tau^{\star}$
 \end_inset
 
@@ -880,16 +1168,14 @@ Find the locally weighted homography with weighting function parameters
 \begin_inset Formula $\lambda^{\star}$
 \end_inset
 
- that minimizes predicition error on the validation correspondence across
- all nine folds.
+ by minimizing the error metric mentioned in the previous step.
 \end_layout
 
 \begin_layout Standard
 In other words, we restrict our attention to a dataset consisting of the
  nine correspondences closest to the image center.
- We now require a locally-weighted homography model for these nine correspondenc
-es.
- We find the optimal parameters of this model by minimizing the 
+ We find the optimal parameters of the locally-weighted homography for these
+ nine correspondences by minimizing the 
 \emph on
 leave-out-one cross-validation 
 \emph default
@@ -898,15 +1184,15 @@ leave-out-one cross-validation
 LOO-CV
 \size default
 ) error across folds of the dataset.
- Since we do not have proof of differentiability of the 
+ Since we do not have proof of differentiability for the 
 \size small
 LOO-CV
 \size default
- error in this case, we perform direct optimization using Powell's method
+ error in this case, we perform direct minimization using Powell's method
  
 \size small
 \color magenta
-[ref]
+[?]
 \size default
 \color inherit
 .
@@ -917,30 +1203,24 @@ Non-linear refinement
 \end_layout
 
 \begin_layout Standard
-For each image, the local homography at the center, 
+Given the local homography at the center for each image, 
 \begin_inset Formula $\mathbf{H}_{0}$
 \end_inset
 
-, obtained from the previous step is then decomposed into an intrisics matrix
- 
+, the camera intrinsics matrix, 
 \begin_inset Formula $\mathbf{K}$
 \end_inset
 
- and an extrinsics matrix 
+, and the extrinsics matrix, 
 \begin_inset Formula $\mathbf{E}$
 \end_inset
 
-, as detailed in Zhang's work 
+, corresponding to that particular image can be approximately recovered,
+ using the homography decomposition mentioned in Zhang's work 
 \color magenta
-[zhang00]
+[?]
 \color inherit
 .
- The matrix 
-\begin_inset Formula $\mathbf{K}$
-\end_inset
-
- contains the camera parameters of interest such as focal length and principal
- point.
  Let
 \begin_inset Formula 
 \[
@@ -953,25 +1233,34 @@ For each image, the local homography at the center,
 \end_layout
 
 \begin_layout Standard
-In general, 
-\begin_inset Formula $\mathbf{H}_{0}\neq\mathbf{H}'$
+Ideally, 
+\begin_inset Formula $\mathbf{H}_{0}=\mathbf{H}'$
 \end_inset
 
- because the decomposition is approximate.
- Thus, our estimates of the intrinsics and extrinsics produce significant
- errors in matching the world-image correspondences.
- To remove these errors, we minimize the reprojection error using the 
+.
+ But this is generally not the case because the homography decomposition
+ is approximate.
+ As a consequence, the re-projection error of world points through 
+\begin_inset Formula $\mathbf{K}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbf{E}$
+\end_inset
+
+ has significant errors.
+ To remove these errors, we minimize the re-projection error with the 
 \emph on
-levenberg-marquadt
+Levenberg-Marquadt
 \emph default
  method 
 \color magenta
-[ref]
+[?]
 \color inherit
-, much like the optimization used in classic camera calibration.
- The optimization is structured such that the images in each zoom setting
- have the same intrinsics but different extrinsics, corresponding to different
- poses of the calibration target.
+.
+ The optimization is structured such that the set of images acquired at
+ one zoom level have the same intrinsics, but different extrinsics corresponding
+ to different poses of the calibration target.
 \end_layout
 
 \begin_layout Standard
@@ -980,31 +1269,301 @@ In this non-linear refinement step, we essentially perform classic calibration
 \end_layout
 
 \begin_layout Enumerate
-We use 
+We use the local homography 
 \begin_inset Formula $\mathbf{H}_{0}$
 \end_inset
 
- to get obtain initial intrinsics and extrinsics.
- In classic camera calibration a homography is fit to all correspondences
- in the image.
+ to get obtain initial estimates of intrinsics and extrinsics.
+ In classic camera calibration, the initial estimates are obtained from
+ a homography that is fit to all correspondences in the image.
 \end_layout
 
 \begin_layout Enumerate
 We ignore the role of distortion.
- Instead, we weight reprojection errors according to the weighting function
- used while estimating 
+ Instead, we weight re-projection errors according to the weighting function
+ of the locally-weighted homography 
 \begin_inset Formula $\mathbf{H}_{0}$
 \end_inset
 
 .
 \end_layout
 
+\begin_layout Standard
+The use of weighted re-projection errors implicitly compensates for distortion
+ because, by construction, the weights of 
+\begin_inset Formula $\mathbf{H}_{0}$
+\end_inset
+
+ were optimized to produce a locally optimal model while compensating for
+ distortion in the neighboring correspondences.
+\end_layout
+
 \begin_layout Subsection
 Distortion estimate and interpolation
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Distortion-estimate-interpolation"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+At each zoom level, we obtain distortion observations and build a predictive
+ Gaussian Process model as explained in Sec.
+\begin_inset space \thinspace{}
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Lens-distortion-estimation"
+
+\end_inset
+
+.
+ The Gaussian Process model allows us to predict distortion within a calibrated
+ zoom level.
+ To predict the distortion at an intermediate zoom level, we linearly interpolat
+e between the GP predictions of the two bracketing calibrated zoom levels.
+ As a concrete example, let 
+\begin_inset Formula $d(x,y,z)$
+\end_inset
+
+ be the predictive model of distortion at pixel 
+\begin_inset Formula $(x,y)$
+\end_inset
+
+ at zoom level 
+\begin_inset Formula $z$
+\end_inset
+
+.
+ Suppose we require the distortion at a zoom level of 24
+\begin_inset space \thinspace{}
+\end_inset
+
+mm, but we only have calibrated models at 20
+\begin_inset space \thinspace{}
+\end_inset
+
+mm and 26
+\begin_inset space \thinspace{}
+\end_inset
+
+mm.
+ We linearly interpolate between 
+\begin_inset Formula $d(x,y,20)$
+\end_inset
+
+ and 
+\begin_inset Formula $d(x,y,26)$
+\end_inset
+
+ to obtain the distortion prediction for 24
+\begin_inset space \thinspace{}
+\end_inset
+
+mm.
 \end_layout
 
 \begin_layout Section
-Evaluation
+Experiments
+\end_layout
+
+\begin_layout Standard
+We use a Nikon 18-200
+\begin_inset space \thinspace{}
+\end_inset
+
+mm auto-focus zoom lens mounted on a Nikon 
+\size small
+D7100
+\size default
+ camera for our experiments.
+ We calibrate the zoom lens at 16 different zoom levels between the nominal
+ focal lengths of 18
+\begin_inset space \thinspace{}
+\end_inset
+
+mm and 75
+\begin_inset space \thinspace{}
+\end_inset
+
+mm.
+\end_layout
+
+\begin_layout Standard
+The nominal focal length used while acquiring an image using the camera
+ is available from the 
+\size small
+EXIF
+\size default
+ meta-data for that image.
+ This focal length corresponds to a zoom level setting; it is proportional
+ to the focal length in pixels, but there is no direct linear relationship.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide true
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename figures/zoom_intrinsics.svg
+	lyxscale 20
+	width 100text%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Variation in camera parameters across zoom levels.
+ On the top-left, we plot the variation in pixel focal length with zoom.
+ The focal lengths 
+\begin_inset Formula $fx$
+\end_inset
+
+ and 
+\begin_inset Formula $fy$
+\end_inset
+
+ are almost equal at all zoom levels.
+ The top-right plot shows the average distortion across zoom levels.
+ Note how the distortion is minimal near the nominal focal length of 30
+\begin_inset space \thinspace{}
+\end_inset
+
+mm.
+\begin_inset Newline newline
+\end_inset
+
+
+\series bold
+\color magenta
+Notes
+\series default
+: The focal length at 75
+\begin_inset space \thinspace{}
+\end_inset
+
+mm seems off.
+ I am going to perform another calibration.
+ Also, run calibrations across data folds to produce error bar plots.
+ I have been getting consistent outliers in 
+\begin_inset Formula $cx$
+\end_inset
+
+ and 
+\begin_inset Formula $cy$
+\end_inset
+
+ plots at 46
+\begin_inset space ~
+\end_inset
+
+mm and 52
+\begin_inset space ~
+\end_inset
+
+mm.
+ Need some investigation here.
+ May be the error bar experiment will throw some light here.
+ Nevertheless, our distortion estimate is not directly dependent on the
+ 
+\begin_inset Formula $cx$
+\end_inset
+
+, 
+\begin_inset Formula $cy$
+\end_inset
+
+ parameters.
+\begin_inset Newline newline
+\end_inset
+
+In the discussion section, I am also going to point out the lens used in
+ the experiment is a photographer's lens and not an industrial/machine vision
+ lens.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide true
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename figures/placeholder.svg
+	lyxscale 20
+	width 35text%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Accuracy of distortion prediction.
+ We hold out the calibration for one zoom level and plot the average prediction
+ error for that zoom level.
+ The interpolation method is performed using the method of Sec.
+\begin_inset space \thinspace{}
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Distortion-estimate-interpolation"
+
+\end_inset
+
+.
+ 
+\color magenta
+WIP: What can we conclude from this plot?
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Discussion
 \end_layout
 
 \begin_layout Section
