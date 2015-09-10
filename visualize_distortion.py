@@ -139,6 +139,9 @@ def save_plot(hmodel):
         print '  [ y ]'
         print '  ' + str(model._gp_y.fit_result).replace('\n', '\n      ')
 
+        with open(hmodel.filestem + '.gp', 'w') as f:
+            pickle.dump(model, f)
+
     #
     # Visualization
     #
