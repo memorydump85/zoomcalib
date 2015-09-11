@@ -27,7 +27,7 @@ class CameraCalibration(object):
     def load_from_file(class_, filename):
         # parse the filename to get intrinsic/extrinsic tags
         filestem = os.path.splitext(filename)[0]
-        etag, itag = filestem.split('/')[-2:]
+        itag, etag = filestem.split('/')[-2:]
 
         with open(filestem + '.lh0+') as f:
             K, E = pickle.load(f)
