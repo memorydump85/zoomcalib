@@ -3,10 +3,10 @@
 import os.path
 import numpy as np
 import cPickle as pickle
+from itertools import groupby
 from collections import OrderedDict
 from scipy.optimize import root
 
-from projective_math import SqExpWeightingFunction
 from camera_math import estimate_intrinsics_noskew_assume_cxy
 from camera_math import estimate_intrinsics_noskew
 from camera_math import get_extrinsics_from_homography
@@ -215,17 +215,20 @@ class ConstraintGraph(object):
     istate = property(_pack_intrinsics_into_vector, _unpack_intrinsics_from_vector)
 
 
+def refine_homography_subset(args):
+    """ Load homographies pickled in `homography_files` and
+    choose a subset of these homographies according to `bit_index`.
+    Refine this subset of homographies """
 
-def main():
-    import sys
-    from glob import iglob
-    from itertools import groupby
+    homography_files, bit_index = args
 
-    np.set_printoptions(precision=4, suppress=True)
+    def take_by_bitindex(list_, bits_as_int):
+        indices = xrange(len(list_)-1, -1, -1)
+        bool_bits = ( bool(bits_as_int & 2**i) for i in indices )
+        return [ entry for entry, bit in zip(list_, bool_bits) if bit ]
 
-    folder = sys.argv[1]
-    saved_files = iglob(folder + '/*.lh0')
-    hmodels = [ HomographyModel.load_from_file(f) for f in saved_files ]
+    homography_files = take_by_bitindex(homography_files, bit_index)
+    hmodels = [ HomographyModel.load_from_file(f) for f in homography_files ]
 
     #
     # Deconstruct information in the HomographyModels into
@@ -238,7 +241,6 @@ def main():
 
     for itag, group in groupby(hmodels, key=itag_getter):
         group = list(group)
-        group = np.random.choice(group, 5, replace=False)
         homographies = [ hm.homography_at_center() for hm in group ]
 
         K = estimate_intrinsics_noskew(homographies)
@@ -260,24 +262,39 @@ def main():
     #
     # Optimize graph to reduce error in constraints
     #
-    def print_graph_summary(title):
-        # print '    rmse: %.4f' % np.sqrt(graph.sq_pixel_errors().mean())
-        # print '  rmaxse: %.4f' % np.sqrt(graph.sq_pixel_errors().max())
-        # print ''
-        for itag, inode in graph.inodes.iteritems():
-            print '%.3f %.3f %.3f %.3f' % inode.to_tuple()
-
     def objective(x):
         graph.state = x
         return graph.constraint_errors()
 
-    def optimize_graph():
-        x0 = graph.state
-        result = root(objective, x0, method='lm', options={'factor': 0.1, 'col_deriv': 1})
-        graph.state = result.x
-        print_graph_summary('Final:')
+    x0 = graph.state
+    result = root(objective, x0, method='lm', options={'factor': 0.1, 'col_deriv': 1})
+    graph.state = result.x
 
-    optimize_graph()
+    return graph.istate
+
+
+def main():
+    import sys
+    import multiprocessing
+    from glob import glob
+
+    np.set_printoptions(precision=4, suppress=True)
+
+    def random_combinations(n, m):
+        n_choose_m = [ x for x in xrange(2**n) if bin(x).count('1') == m ]
+        return np.random.choice(n_choose_m, 250, replace=False)
+
+    for subfolder in sorted(glob(sys.argv[1] + '/*')):
+        print '  %s' % subfolder
+        homography_files = glob(subfolder + '/*.lh0')
+        num_files = len(homography_files)
+
+        pool = multiprocessing.Pool()
+        args = [ (homography_files, bit_index) for bit_index in random_combinations(num_files, 5) ]
+        samples = pool.map(refine_homography_subset, args)
+
+        with open(subfolder + '/intrinsics.samples', 'w') as f:
+            pickle.dump(samples, f)
 
 if __name__ == '__main__':
     main()
