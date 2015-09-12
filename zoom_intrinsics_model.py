@@ -1,3 +1,5 @@
+#! /usr/bin/python
+
 import sys
 import glob
 import numpy as np
@@ -21,14 +23,18 @@ def robust_regression(x, t, degree):
         y = np.polyval(w, x)
         return np.median((y - t)**2)
 
-    linear_model = minimize(median_squared_error, x0=[0., 0.], args=(x, t), method="Powell").x
-    if degree == 1:
-        return linear_model
+    def huber_loss(w, x, t, delta):
+        y = np.polyval(w, x)
+        abserr = np.abs(y-t)
+        return np.where(abserr <= delta, abserr**2/2., delta*(abserr - delta/2.)).sum()
+
+    def pseudo_huber_loss(w, x, t, delta):
+        y = np.polyval(w, x)
+        abserr = np.abs(y-t)
+        return (delta**2*(np.sqrt(1 + (abserr/delta)**2) - 1)).sum()
 
     w0 = [0.] * (degree+1)
-    w0[-1] = linear_model[0]
-    w0[-2] = linear_model[1]
-    poly_model = minimize(median_squared_error, x0=w0, args=(x, t), method="Powell").x
+    poly_model = minimize(huber_loss, x0=w0, args=(x, t, 1.), method="Powell").x
     return poly_model
 
 
@@ -41,12 +47,16 @@ def main():
     data = np.vstack(data)
 
     zoom, fx, fy, cx, cy = np.vstack(data).T
-    zoomzoom = np.vstack(( zoom, zoom ))
-    fxfy = np.vstack(( fx, fy ))
+    zoomzoom = np.hstack(( zoom, zoom ))
+    fxfy = np.hstack(( fx, fy ))
 
-    focus_model = robust_regression(zoomzoom, fxfy, 2)
-    cx_model = robust_regression(zoom, cx, 1)
-    cy_model = robust_regression(zoom, cy, 1)
+    focus_model = robust_regression(zoomzoom, fxfy, 4)
+    cx_model = robust_regression(zoom, cx, 14)
+    cy_model = robust_regression(zoom, cy, 14)
+
+    print focus_model
+    print cx_model
+    print cy_model
 
     with open(folder + '/intrinsics.model', 'w') as f:
         pickle.dump((data, focus_model, cx_model, cy_model), f)

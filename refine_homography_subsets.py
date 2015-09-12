@@ -11,7 +11,7 @@ from camera_math import estimate_intrinsics_noskew_assume_cxy
 from camera_math import estimate_intrinsics_noskew
 from camera_math import get_extrinsics_from_homography
 from camera_math import matrix_to_xyzrph, matrix_to_intrinsics
-from camera_math import xyzrph_to_matrix, intrisics_to_matrix
+from camera_math import xyzrph_to_matrix, intrinsics_to_matrix
 from tupletypes import WorldImageHomographyInfo
 
 
@@ -83,7 +83,7 @@ class IntrinsicsNode(object):
         return repr(self.to_tuple())
 
     def to_matrix(self):
-        return intrisics_to_matrix(*self.to_tuple())
+        return intrinsics_to_matrix(*self.to_tuple())
 
 
 #-------------------------------------
@@ -284,9 +284,9 @@ def main():
         n_choose_m = [ x for x in xrange(2**n) if bin(x).count('1') == m ]
         return np.random.choice(n_choose_m, 250, replace=False)
 
-    for subfolder in sorted(glob(sys.argv[1] + '/*')):
+    for subfolder in sorted(glob(sys.argv[1] + '/*/')):
         print '  %s' % subfolder
-        homography_files = glob(subfolder + '/*.lh0')
+        homography_files = glob(subfolder + '*.lh0')
         num_files = len(homography_files)
 
         pool = multiprocessing.Pool()

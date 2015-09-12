@@ -11,7 +11,7 @@ from camera_math import estimate_intrinsics_noskew_assume_cxy
 from camera_math import estimate_intrinsics_noskew
 from camera_math import get_extrinsics_from_homography
 from camera_math import matrix_to_xyzrph, matrix_to_intrinsics
-from camera_math import xyzrph_to_matrix, intrisics_to_matrix
+from camera_math import xyzrph_to_matrix, intrinsics_to_matrix
 from tupletypes import WorldImageHomographyInfo
 
 
@@ -83,7 +83,7 @@ class IntrinsicsNode(object):
         return repr(self.to_tuple())
 
     def to_matrix(self):
-        return intrisics_to_matrix(*self.to_tuple())
+        return intrinsics_to_matrix(*self.to_tuple())
 
 
 #-------------------------------------

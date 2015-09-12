@@ -11,9 +11,6 @@ def main():
     with open(sys.argv[1] + '/intrinsics.model') as f:
         data, focus_model, cx_model, cy_model = pickle.load(f)
 
-    print focus_model
-    print cx_model
-    print cy_model
     zoom, fx, fy, cx, cy = data.T
 
     plt.subplot(221)

@@ -220,7 +220,7 @@ def matrix_to_xyzrph(M):
     return tx, ty, tz, rx, ry, rz
 
 
-def intrisics_to_matrix(fx, fy, cx, cy):
+def intrinsics_to_matrix(fx, fy, cx, cy):
     return np.array([[ fx,   0,  cx,  0. ],
                      [  0,  fy,  cy,  0. ],
                      [  0,   0,   1,  0. ]])
