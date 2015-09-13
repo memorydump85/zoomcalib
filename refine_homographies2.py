@@ -154,8 +154,13 @@ class HomographyConstraint(object):
 
 
     def sq_errors(self):
-        sqerr = self.sq_unweighted_reprojection_errors()
-        return sqerr.dot(self.W).ravel()
+        sqerr = self.sq_unweighted_reprojection_errors().ravel()
+        abserr = np.sqrt(sqerr)
+
+        def pseudo_huber_loss(delta):
+            return np.where(abserr <= delta, sqerr/2., delta*(abserr - delta/2.))
+
+        return pseudo_huber_loss(1.)
 
 
 #--------------------------------------
@@ -273,7 +278,7 @@ def main():
     print ''
     for constraint in (c for c in graph.constraints if isinstance(c, HomographyConstraint)):
         rmse = np.sqrt(constraint.sq_unweighted_reprojection_errors().mean())
-        print '  %s %s rmse: %.2f' % (constraint.enode.tag, constraint.inode.tag, rmse)
+        print '  %s rmse: %.2f' % (constraint.enode.tag, rmse)
 
     #
     # Optimize graph to reduce error in constraints
@@ -309,6 +314,12 @@ def main():
     print '====================='
 
     optimize_graph()
+
+    print ' '
+    for constraint in (c for c in graph.constraints if isinstance(c, HomographyConstraint)):
+        if constraint.enode.tag.endswith("/pose0"):
+            rmse = np.sqrt(constraint.sq_unweighted_reprojection_errors().mean())
+            print '  %s rmse: %.2f' % (constraint.enode.tag, rmse)
 
     #
     # Write out the refined intrinsics and extrinsics

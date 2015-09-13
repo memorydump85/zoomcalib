@@ -154,8 +154,13 @@ class HomographyConstraint(object):
 
 
     def sq_errors(self):
-        sqerr = self.sq_unweighted_reprojection_errors()
-        return sqerr.dot(self.W).ravel()
+        sqerr = self.sq_unweighted_reprojection_errors().ravel()
+        abserr = np.sqrt(sqerr)
+
+        def pseudo_huber_loss(delta):
+            return np.where(abserr <= delta, sqerr/2., delta*(abserr - delta/2.))
+
+        return pseudo_huber_loss(1.)
 
 
 #--------------------------------------
@@ -273,6 +278,13 @@ def refine_homography_subset(args):
     return graph.istate
 
 
+def refine_homography_subset_no_except(args):
+    try:
+        return refine_homography_subset(args)
+    except:
+        return (0., 0., 0., 0.)
+
+
 def main():
     import sys
     import multiprocessing
@@ -291,7 +303,7 @@ def main():
 
         pool = multiprocessing.Pool()
         args = [ (homography_files, bit_index) for bit_index in random_combinations(num_files, 5) ]
-        samples = pool.map(refine_homography_subset, args)
+        samples = pool.map(refine_homography_subset_no_except, args)
 
         with open(subfolder + '/intrinsics.samples', 'w') as f:
             pickle.dump(samples, f)
