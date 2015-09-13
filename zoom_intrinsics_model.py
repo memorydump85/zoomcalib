@@ -19,6 +19,10 @@ def load_intrinsics_sample_data(filename):
 
 def robust_regression(x, t, degree):
 
+    def mean_squared_error(w, x, t):
+        y = np.polyval(w, x)
+        return np.mean((y - t)**2)
+
     def median_squared_error(w, x, t):
         y = np.polyval(w, x)
         return np.median((y - t)**2)
@@ -34,7 +38,7 @@ def robust_regression(x, t, degree):
         return (delta**2*(np.sqrt(1 + (abserr/delta)**2) - 1)).sum()
 
     w0 = [0.] * (degree+1)
-    poly_model = minimize(huber_loss, x0=w0, args=(x, t, 1.), method="Powell").x
+    poly_model = minimize(mean_squared_error, x0=w0, args=(x, t), method="Powell").x
     return poly_model
 
 
@@ -51,8 +55,8 @@ def main():
     fxfy = np.hstack(( fx, fy ))
 
     focus_model = robust_regression(zoomzoom, fxfy, 4)
-    cx_model = robust_regression(zoom, cx, 3)
-    cy_model = robust_regression(zoom, cy, 3)
+    cx_model = robust_regression(zoom, cx, 6)
+    cy_model = robust_regression(zoom, cy, 6)
 
     print focus_model
     print cx_model
