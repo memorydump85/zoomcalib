@@ -51,8 +51,8 @@ def main():
     fxfy = np.hstack(( fx, fy ))
 
     focus_model = robust_regression(zoomzoom, fxfy, 4)
-    cx_model = robust_regression(zoom, cx, 14)
-    cy_model = robust_regression(zoom, cy, 14)
+    cx_model = robust_regression(zoom, cx, 3)
+    cy_model = robust_regression(zoom, cy, 3)
 
     print focus_model
     print cx_model
