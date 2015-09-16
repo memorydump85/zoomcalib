@@ -56,6 +56,11 @@ class CameraCalibration(object):
         return np.vstack([ x, y, zoom, u, v ]).T
 
 
+    def undistortion_magnitudes(self):
+        x, y, u, v = self.undistortion.T
+        return np.sqrt(u**2+v**2)
+
+
 def main():
     import sys
     from glob import iglob
@@ -70,25 +75,24 @@ def main():
     #
     from matplotlib import pyplot as plt
 
-    plt.style.use('ggplot')
-    plt.figure(figsize=(16,10))
+    #plt.style.use('ggplot')
+    plt.figure(figsize=(8,5))
 
     zoom_stops = [ float(cc.itag) for cc in calibrations ]
     intrinsics = np.array([ cc.intrinsics for cc in calibrations ])
+    mean_distortions =  np.array([ cc.undistortion_magnitudes().mean() for cc in calibrations ])
+    max_distortions =  np.array([ cc.undistortion_magnitudes().max() for cc in calibrations ])
 
-    plt.suptitle('Zoom Model')
-    plt.subplot(221)
-    plt.title('fx')
-    plt.plot(zoom_stops, intrinsics[:,0], 'o-')
-    plt.subplot(222)
-    plt.title('fy')
-    plt.plot(zoom_stops, intrinsics[:,1], 'o-')
-    plt.subplot(223)
-    plt.title('cx')
-    plt.plot(zoom_stops, intrinsics[:,2], 'o-')
-    plt.subplot(224)
-    plt.title('cy')
-    plt.plot(zoom_stops, intrinsics[:,3], 'o-')
+    plt.plot(zoom_stops, max_distortions, 'o-', color='#CC2529', label='max', markersize=5, linewidth=2)
+    plt.plot(zoom_stops, mean_distortions, 'D-', color='#DA7C30', label='mean', markersize=4, linewidth=2)
+    plt.legend()
+    plt.xticks([18, 24, 28, 31, 35, 40, 44, 50, 55, 60, 65, 70])
+    plt.xlim( (15, 75) )
+    plt.xlabel('lens zoom setting')
+    plt.ylabel('pixels')
+    plt.grid(b=True, which='major', color='#ededed', linestyle='-')
+    plt.gca().set_axisbelow(True)
+    plt.tight_layout()
     plt.show()
 
 if __name__ == '__main__':
