@@ -115,7 +115,7 @@ cdef extern from "tag25h7.h":
 #
 
 from collections import namedtuple
-AprilTagDetection = namedtuple('TagDetection',
+AprilTagDetection = namedtuple('AprilTagDetection',
                         ['id', 'hamming', 'goodness', 'decision_margin', 'H', 'c', 'p'])
 
 
