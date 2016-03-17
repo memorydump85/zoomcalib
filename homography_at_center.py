@@ -6,6 +6,7 @@ import os.path
 from skimage.io import imread
 from skimage.color import rgb2gray
 from skimage.transform import rescale as imrescale
+from skimage.util import img_as_ubyte
 from scipy.optimize import minimize
 from sklearn.cross_validation import LeaveOneOut
 
@@ -60,8 +61,8 @@ def get_tag_detections(im):
     assert len(im.shape) == 2
     im4 = imrescale(im, 1./4)
 
-    im  = ( im * 255.).astype(np.uint8)
-    im4 = (im4 * 255.).astype(np.uint8)
+    im  = img_as_ubyte(im)
+    im4 = img_as_ubyte(im4)
 
     detections1 = AprilTagDetector().detect(im)
     detections4 = AprilTagDetector().detect(im4)
