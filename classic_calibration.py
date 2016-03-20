@@ -101,18 +101,19 @@ def get_homography_estimate(filename):
 #-------------------------------------
 class IntrinsicsNode(object):
 #-------------------------------------
-    def __init__(self, tag, fx, fy, cx, cy, k1=0, k2=0):
+    def __init__(self, tag, fx, fy, cx, cy, k1=0, k2=0, k3=0):
         self.fx = fx
         self.fy = fy
         self.cx = cx
         self.cy = cy
         self.k1 = k1
         self.k2 = k2
+        self.k3 = k3
         self.tag = tag # convenient identification
 
     def to_tuple(self):
         return ( self.fx, self.fy, self.cx, self.cy,
-                 self.k1, self.k2 )
+                 self.k1, self.k2, self.k3 )
 
     def set_value(self, *tupl):
         self.fx = tupl[0]
@@ -121,6 +122,7 @@ class IntrinsicsNode(object):
         self.cy = tupl[3]
         self.k1 = tupl[4]
         self.k2 = tupl[5]
+        self.k2 = tupl[6]
 
     def __repr__(self):
         return repr(self.to_tuple())
@@ -135,7 +137,7 @@ class IntrinsicsNode(object):
         return points - c # points is (2, N)
 
     def distort_radius(self, sq_radius):
-        return self.k1*sq_radius + self.k2*(sq_radius**2)
+        return self.k1*sq_radius + self.k2*(sq_radius**2) + self.k3*(sq_radius**3)
 
 
 #-------------------------------------
@@ -257,8 +259,8 @@ class ConstraintGraph(object):
     def _unpack_from_vector(self, v):
         """ Set node values from the vector `v` """
         N = len(self.inodes)
-        istate = np.reshape(v[:6*N], (-1, 6))
-        estate = np.reshape(v[6*N:], (-1, 6))
+        istate = np.reshape(v[:7*N], (-1, 7))
+        estate = np.reshape(v[7*N:], (-1, 6))
 
         for inode, ival in zip(self.inodes.values(), istate):
             inode.set_value(*ival)
@@ -394,25 +396,6 @@ def main():
     warp = ClassicLensWarp(inode, homography_info[0].imshape)
     with open(folder + '/classic.poly', 'w') as f:
         pickle.dump(warp, f)
-
-    # #
-    # # Visualization
-    # #
-    # from matplotlib import pyplot as plt
-    # plt.style.use('ggplot')
-
-    # for i, c in enumerate(graph.constraints[:9]):
-    #     z = c.p_tgt
-    #     u = c.reproject_distort_world_points()
-
-    #     #plt.subplot(3, 3, i+1)
-    #     r = z - u
-    #     plt.plot(r[0,:], r[1,:], 'o')
-    #     # plt.quiver(z[0,:], z[1,:], r[0,:], r[1,:])
-    #     # plt.quiver(z[0,:], z[1,:],
-    #     #     u[0,:]-z[0,:], u[1,:]-z[1,:],
-    #     #     angles='xy', scale_units='xy', scale=1)
-    # plt.show()
 
 
 if __name__ == '__main__':
